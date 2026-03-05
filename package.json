@@ -1,0 +1,20 @@
+{
+  "name": "gitlab-stats",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Script to get some stats from GitLab",
+  "main": "gitLabScript.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Adrian",
+  "license": "ISC",
+  "dependencies": {
+    "dayjs": "^1.11.13",
+    "dayjs-business-time": "^1.0.4",
+    "fs": "^0.0.1-security",
+    "node-fetch": "^3.3.1",
+    "nodemailer": "^6.9.4",
+    "p-limit": "^6.2.0"
+  }
+}
