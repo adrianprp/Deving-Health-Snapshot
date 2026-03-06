@@ -27,12 +27,10 @@ export const enrichMergeRequests = (mrs, requiredApprovals) => {
       approvalTimestamp,
       reviewCycleTime
     };
-
   });
 };
 
 const getFirstCommentAt = (notes ,author) => {
-
   const validNotes = notes
     .filter(note => isValidReviewerFeedback(note, author))
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
