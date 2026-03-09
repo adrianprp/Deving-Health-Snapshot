@@ -102,7 +102,7 @@ This prevents distorted metrics when teams are spread globally.
 ```
 
 
-##SPACE Mapping
+## SPACE Mapping
 
 https://queue.acm.org/detail.cfm?id=3454124
 
