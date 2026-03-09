@@ -16,21 +16,21 @@ export const enrichMergeRequests = (mrs, requiredApprovals) => {
       mr.author.name
     );
 
-    const firstNonAuthorCommentAt = getFirstCommentAt(
+    const firstNonAuthorNoteAt = getFirstNoteAt(
       mr.notes,
       mr.author.name
     );
 
     return {
       ...mr,
-      firstNonAuthorCommentAt,
+      firstNonAuthorNoteAt,
       approvalTimestamp,
       reviewCycleTime
     };
   });
 };
 
-const getFirstCommentAt = (notes ,author) => {
+const getFirstNoteAt = (notes ,author) => {
   const validNotes = notes
     .filter(note => isValidReviewerFeedback(note, author))
     .sort((a, b) => new Date(a.created_at) - new Date(b.created_at));

@@ -16,7 +16,6 @@ export const normalizeMergeRequests = (rawMrs) => {
       isDraft:
         mr.draft ??
         mr.title?.toLowerCase().includes("draft"),
-      changesCount: mr.changes_count,
       url: mr.web_url,
       notes: mr.notes || []
     }));

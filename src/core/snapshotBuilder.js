@@ -2,32 +2,41 @@ import * as metrics from "./metrics.js";
 import { formatTime } from "../utils/timeUtils.js";
 
 export const buildSnapshot = ({
-  yearToDateMrs,
-  currentWeekMrs,
+  currentPeriodMrs,
+  rollingWindowMrs,
+  rollingWindowExcludingCurrentMrs,
   reviewers,
   startDate,
   endDate
 }) => {
-
-  const avgYtd =
+  const windowAvgExcludingCurrent =
     metrics.calculateAverageReviewCycleTime(
-      yearToDateMrs
+      rollingWindowExcludingCurrentMrs
     );
+
+  const fullWindowAvg =
+    metrics.calculateAverageReviewCycleTime(
+      rollingWindowMrs
+    );
+
+  const delta =
+    fullWindowAvg - windowAvgExcludingCurrent;
 
   const avgFeedback =
     metrics.calculateAverageFeedbackTime(
-      currentWeekMrs
+      currentPeriodMrs
     );
 
   const reviewerResponse =
     metrics.calculateReviewerResponseTime(
-      currentWeekMrs,
+      currentPeriodMrs,
       reviewers
     );
 
   return {
     period: `${startDate.format("dddd, MMMM D")} - ${endDate.format("dddd, MMMM D")}`,
-    averageTimeYearToDate: formatTime(avgYtd),
+    reviewCycleTime90days: formatTime(fullWindowAvg),
+    reviewCycleTrend: formatTime(delta),
     averageFeedbackTime: formatTime(avgFeedback),
     reviewerResponseTimes: reviewerResponse
   };

@@ -18,20 +18,20 @@ dayjs.extend(isBetween);
 dayjs.extend(minMax)
 
 const snapshot = (async () => {
-  
-  const startDate = dayjs()
-  .startOf("isoWeek")
-  .subtract(1, "week")
-  .add(8, "hour");
-  
-  const endDate = dayjs()
-    .startOf("isoWeek")
-    .subtract(1, "week")
-    .add(4, "day")
-    .add(20, "hour");
 
-  const startOfYearDate = dayjs()
-    .startOf("year")
+  // Weekly Span of time
+  const startDate = dayjs()
+    .startOf('isoWeek')
+    .subtract(1, 'week')
+    .add(8, 'hour');
+  const endDate = dayjs()
+    .startOf('isoWeek')
+    .subtract(1, 'week')
+    .add(4, 'day')
+    .add(20, 'hour');
+
+  const rollingBaselineStartDate = dayjs()
+    .subtract(90, "days")
     .add(8, "hour");
 
   const presentDate = dayjs();
@@ -43,7 +43,7 @@ const snapshot = (async () => {
 
   const rawMrs = await gitlab.getMergeRequests(
     params.projectIds,
-    startOfYearDate,
+    rollingBaselineStartDate,
     presentDate,
     true
   );
@@ -57,15 +57,21 @@ const snapshot = (async () => {
       params.requiredApprovals
     );
 
-  const yearToDateMrs = enriched;
+  const rollingWindowMrs = enriched;
 
-  const currentWeekMrs = enriched.filter(mr =>
+  const rollingWindowExcludingCurrentMrs = enriched.filter(mr =>
+    !dayjs(mr.createdAt).isBetween(startDate, endDate, null, "[]")
+  );
+
+  // for the feeebback and shit 
+  const currentPeriodMrs = enriched.filter(mr =>
     dayjs(mr.createdAt).isBetween(startDate, endDate)
   );
 
   const snapshot = buildSnapshot({
-    yearToDateMrs,
-    currentWeekMrs,
+    currentPeriodMrs,
+    rollingWindowMrs,
+    rollingWindowExcludingCurrentMrs,
     reviewers: params.eligibleAuthors,
     startDate,
     endDate

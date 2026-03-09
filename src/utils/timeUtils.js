@@ -3,7 +3,7 @@ import { bizConfigByZone, defaultBizTime, authorTimezones } from "../config/time
 
  export const calcTimeDifference = (createdAt, mergedAt, devName) => {
     if (!mergedAt) return null;
-
+  
     const tz = authorTimezones[devName] || "UTC";
     
     const BUSINESS_MINUTES_PER_DAY = 8 * 60;
@@ -46,12 +46,15 @@ import { bizConfigByZone, defaultBizTime, authorTimezones } from "../config/time
   }
 
   export const formatTime = milliseconds => {
-    // 1 day = 8 business-hours.
     if (milliseconds == null) return 'Not yet merged';
-    const totalMinutes = Math.floor(milliseconds / 60000);
+    // 1 day = 8 business-hours.
+    const sign = milliseconds < 0 ? '-' : '';
+    const absMs = Math.abs(milliseconds);
+    const totalMinutes = Math.floor(absMs / 60000);
     const totalHours   = Math.floor(totalMinutes / 60);
     const days         = Math.floor(totalHours / 8);
     const hours        = totalHours % 8;
     const mins         = totalMinutes % 60;
-    return { days, hours, mins, milliseconds };
+    return { days, hours, mins, milliseconds, sign };
   };
+

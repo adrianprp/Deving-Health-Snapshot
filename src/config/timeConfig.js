@@ -84,7 +84,7 @@ export const bizConfigByZone = {
 
 
 
-
+// For accurate reviewCycleTime calculation the authorTimezones should be accurate. 
 export const authorTimezones = {
 /*  
 'name': 'Europe/Bucharest',

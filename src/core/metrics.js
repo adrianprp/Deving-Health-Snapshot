@@ -7,24 +7,19 @@ export const average = (arr) => {
   return valid.reduce((a,b)=> a+b, 0) / valid.length;
 };
 
-
 export const calculateAverageReviewCycleTime = (mrs) =>
   average(mrs.map(mr => mr.reviewCycleTime));
 
 
-export const calculateAverageFeedbackTime = (
-  mrs
-) => {
+export const calculateAverageFeedbackTime = (mrs) => { 
   return average(
-    mrs
-      .filter(mr => mr.firstNonAuthorCommentAt)
-      .map(mr => {
-       return calcTimeDifference(
+    mrs.filter(mr => mr.firstNonAuthorNoteAt).map(mr => 
+          calcTimeDifference(
           mr.createdAt,
-          mr.firstNonAuthorCommentAt,
+          mr.firstNonAuthorNoteAt,
           mr.author.name
         )
-      })
+      )
   );
 }
 
