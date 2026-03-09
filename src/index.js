@@ -57,21 +57,21 @@ const snapshot = (async () => {
       params.requiredApprovals
     );
 
-  const rollingWindowMrs = enriched;
-
-  const rollingWindowExcludingCurrentMrs = enriched.filter(mr =>
-    !dayjs(mr.createdAt).isBetween(startDate, endDate, null, "[]")
+  const openMrs = enriched.filter(
+    mr => mr.state === "opened"
   );
+
+  const rollingWindowMrs = enriched;
 
   // for the feeebback and shit 
   const currentPeriodMrs = enriched.filter(mr =>
-    dayjs(mr.createdAt).isBetween(startDate, endDate)
+    dayjs(mr.createdAt).isBetween(startDate, endDate, null, "[]")
   );
 
   const snapshot = buildSnapshot({
+    openMrs,
     currentPeriodMrs,
     rollingWindowMrs,
-    rollingWindowExcludingCurrentMrs,
     reviewers: params.eligibleAuthors,
     startDate,
     endDate

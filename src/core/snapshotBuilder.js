@@ -2,28 +2,37 @@ import * as metrics from "./metrics.js";
 import { formatTime } from "../utils/timeUtils.js";
 
 export const buildSnapshot = ({
+  openMrs,
   currentPeriodMrs,
   rollingWindowMrs,
-  rollingWindowExcludingCurrentMrs,
   reviewers,
   startDate,
   endDate
 }) => {
-  const windowAvgExcludingCurrent =
-    metrics.calculateAverageReviewCycleTime(
-      rollingWindowExcludingCurrentMrs
-    );
-
-  const fullWindowAvg =
+  console.log(currentPeriodMrs);
+  // 90 day baseline
+  const cycleTime90d =
     metrics.calculateAverageReviewCycleTime(
       rollingWindowMrs
     );
 
-  const delta =
-    fullWindowAvg - windowAvgExcludingCurrent;
+  // weekly performance
+  const weeklyCycleTime =
+    metrics.calculateAverageReviewCycleTime(
+      currentPeriodMrs
+    );
 
-  const avgFeedback =
-    metrics.calculateAverageFeedbackTime(
+  // trend vs baseline
+  const cycleTrend =
+    weeklyCycleTime - cycleTime90d;
+
+  const avgPickupTime =
+    metrics.calculateAveragePickupTime(
+      currentPeriodMrs
+    );
+
+  const avgReviewTime =
+    metrics.calculateAverageReviewTime(
       currentPeriodMrs
     );
 
@@ -33,11 +42,19 @@ export const buildSnapshot = ({
       reviewers
     );
 
+  const waitingForReview =
+    metrics.calculateWaitingForReview(
+      openMrs
+    );
+
   return {
     period: `${startDate.format("dddd, MMMM D")} - ${endDate.format("dddd, MMMM D")}`,
-    reviewCycleTime90days: formatTime(fullWindowAvg),
-    reviewCycleTrend: formatTime(delta),
-    averageFeedbackTime: formatTime(avgFeedback),
+    reviewCycleTime90days: formatTime(cycleTime90d),
+    reviewCycleTimeWeekly: formatTime(weeklyCycleTime),
+    reviewCycleTrend: formatTime(cycleTrend),
+    averagePickupTime: formatTime(avgPickupTime),
+    avgReviewTime: formatTime(avgReviewTime),
+    waitingForReview,
     reviewerResponseTimes: reviewerResponse
   };
 };

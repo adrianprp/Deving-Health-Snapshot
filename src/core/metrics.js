@@ -8,12 +8,12 @@ export const average = (arr) => {
 };
 
 export const calculateAverageReviewCycleTime = (mrs) =>
-  average(mrs.map(mr => mr.reviewCycleTime));
+  average(mrs.map(mr => mr.reviewDoneTimestamp));
 
 
-export const calculateAverageFeedbackTime = (mrs) => { 
+export const calculateAveragePickupTime = (mrs) => { 
   return average(
-    mrs.filter(mr => mr.firstNonAuthorNoteAt).map(mr => 
+    mrs.map(mr => 
           calcTimeDifference(
           mr.createdAt,
           mr.firstNonAuthorNoteAt,
@@ -22,6 +22,29 @@ export const calculateAverageFeedbackTime = (mrs) => {
       )
   );
 }
+
+export const calculateAverageReviewTime = (mrs) => { 
+  return average(
+    mrs.map(mr => 
+          calcTimeDifference(
+          mr.firstNonAuthorNoteAt,
+          mr.approvalTimestamp ?? mr.mergedAt,
+          mr.author.name
+        )
+      )
+  );
+}
+
+export const calculateWaitingForReview = (mrs) => {
+  const culprits = mrs
+  .filter(mr =>
+    mr.state === "opened" &&
+    !mr.isDraft &&
+    !mr.firstNonAuthorNoteAt
+  ).map(mr => mr.url);
+  const number = culprits.length;
+  return { number, culprits }
+};
 
 export const calculateReviewerResponseTime = (
   mergeRequests,
