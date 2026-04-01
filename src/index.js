@@ -4,12 +4,14 @@ import timezone from 'dayjs/plugin/timezone.js';
 import businessTime from 'dayjs-business-time';
 import isBetween from 'dayjs/plugin/isBetween.js';
 import minMax from 'dayjs/plugin/minMax.js'
+import pLimit from "p-limit";
 
 import { params } from "./config/env.js";
 import { GitLabService } from "./services/gitlabService.js";
 import { normalizeMergeRequests } from "./core/normalizer.js";
 import { enrichMergeRequests } from "./core/enrich.js";
-import { buildSnapshot } from "./core/snapshotBuilder.js";
+import { buildFlowSnapshot, buildReviewerSnapshot } from "./core/snapshotBuilder.js";
+import { groupByRepo } from "./utils/utils.js";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -41,12 +43,21 @@ const snapshot = (async () => {
     params.token
   );
 
-  const rawMrs = await gitlab.getMergeRequests(
-    params.projectIds,
-    rollingBaselineStartDate,
-    presentDate,
-    true
+  const limit = pLimit(5);
+
+  const results = await Promise.all(
+    params.projectIds.map(id =>
+      limit(() =>
+        gitlab.getMergeRequests(
+          id,
+          rollingBaselineStartDate,
+          presentDate,
+          true
+        )
+      )
+    )
   );
+  const rawMrs = results.flat();
 
   const normalized =
     normalizeMergeRequests(rawMrs);
@@ -57,24 +68,41 @@ const snapshot = (async () => {
       params.requiredApprovals
     );
 
-  const openMrs = enriched.filter(
-    mr => mr.state === "opened"
+
+  // --- Flow Metrics --- 
+  const snapshot = {};
+
+  const watchedRepoIds = params.flowIds.map(Number);
+
+  const watchedMrs = enriched.filter(mr =>
+    watchedRepoIds.includes(mr.projectId)
   );
 
-  const rollingWindowMrs = enriched;
+  const groupedByRepo = groupByRepo(watchedMrs);
 
-  // for the feeebback and shit 
-  const currentPeriodMrs = enriched.filter(mr =>
+  params.flowIds.forEach((id) => {
+    const mrs = groupedByRepo[id];
+
+    const rollingWindowMrs = mrs;
+  
+    const currentPeriodMrs = mrs.filter(mr =>
+      dayjs(mr.createdAt).isBetween(startDate, endDate, null, "[]")
+    );
+
+    snapshot[id] = buildFlowSnapshot({
+      rollingWindowMrs,
+      currentPeriodMrs,
+    });
+  });
+
+  // --- Individual Metrics ---
+
+  const reviewerMrs = enriched.filter(mr =>
     dayjs(mr.createdAt).isBetween(startDate, endDate, null, "[]")
   );
 
-  const snapshot = buildSnapshot({
-    openMrs,
-    currentPeriodMrs,
-    rollingWindowMrs,
-    reviewers: params.eligibleAuthors,
-    startDate,
-    endDate
+  snapshot.reviewers = buildReviewerSnapshot({  
+   mrs: reviewerMrs, reviewers: params.eligibleAuthors,
   });
 
   console.log(JSON.stringify(snapshot, null, 2));

@@ -1,15 +1,15 @@
 import * as metrics from "./metrics.js";
 import { formatTime } from "../utils/timeUtils.js";
 
-export const buildSnapshot = ({
-  openMrs,
-  currentPeriodMrs,
+export const buildFlowSnapshot = ({
   rollingWindowMrs,
-  reviewers,
-  startDate,
-  endDate
+  currentPeriodMrs,
 }) => {
-  console.log(currentPeriodMrs);
+
+  const openMrs = rollingWindowMrs.filter(
+    mr => mr.state === "opened"
+  );
+
   // 90 day baseline
   const cycleTime90d =
     metrics.calculateAverageReviewCycleTime(
@@ -36,25 +36,40 @@ export const buildSnapshot = ({
       currentPeriodMrs
     );
 
-  const reviewerResponse =
-    metrics.calculateReviewerResponseTime(
-      currentPeriodMrs,
-      reviewers
-    );
-
   const waitingForReview =
     metrics.calculateWaitingForReview(
       openMrs
     );
 
   return {
-    period: `${startDate.format("dddd, MMMM D")} - ${endDate.format("dddd, MMMM D")}`,
-    reviewCycleTime90days: formatTime(cycleTime90d),
-    reviewCycleTimeWeekly: formatTime(weeklyCycleTime),
-    reviewCycleTrend: formatTime(cycleTrend),
-    averagePickupTime: formatTime(avgPickupTime),
-    avgReviewTime: formatTime(avgReviewTime),
-    waitingForReview,
-    reviewerResponseTimes: reviewerResponse
-  };
+    flow: {
+      cycleTime: {
+        baseline90d: formatTime(cycleTime90d),
+        weekly: formatTime(weeklyCycleTime),
+        trend: formatTime(cycleTrend)
+      },
+      pickupTime: formatTime(avgPickupTime),
+      reviewTime: formatTime(avgReviewTime),
+      waitingForReview
+    },
+  }
 };
+
+
+export const buildReviewerSnapshot = ({
+  mrs,
+  reviewers,
+}) => {
+
+  const reviewerResponse =
+    metrics.calculateReviewerResponseTime(
+      mrs,
+      reviewers
+    );
+
+  return {
+      reviewers: reviewerResponse
+  }
+};
+
+

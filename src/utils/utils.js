@@ -4,3 +4,15 @@ export const isValidReviewerFeedback = (note, author) =>
     (note.author.name !== author &&
     (note.body.includes('approved this merge request') || note.body.includes('unapproved this merge request'))
 );
+
+export const groupByRepo = (mrs) => {
+  return mrs.reduce((acc, mr) => {
+    if (!acc[mr.projectId]) {
+      acc[mr.projectId] = [];
+    }
+
+    acc[mr.projectId].push(mr);
+
+    return acc;
+  }, {});
+};
