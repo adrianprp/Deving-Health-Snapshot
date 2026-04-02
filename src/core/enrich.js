@@ -1,13 +1,13 @@
 import { calcTimeDifference } from "../utils/timeUtils.js";
 import { isValidReviewerFeedback } from "../utils/utils.js"
+import { params } from "../config/env.js";
 
-export const enrichMergeRequests = (mrs, requiredApprovals) => {
+export const enrichMergeRequests = (mrs) => {
 
   return mrs.map(mr => {
 
     const approvalTimestamp = getApprovalTimestamp(
-      mr.notes,
-      requiredApprovals
+      mr.notes
     );
 
     const reviewDoneTimestamp = calcTimeDifference(
@@ -21,11 +21,16 @@ export const enrichMergeRequests = (mrs, requiredApprovals) => {
       mr.author.name
     );
 
+    const reviewers = extractReviewers(
+      mr.notes
+    )
+
     return {
       ...mr,
       firstNonAuthorNoteAt,
       approvalTimestamp,
-      reviewDoneTimestamp
+      reviewDoneTimestamp,
+      reviewers
     };
   });
 };
@@ -39,7 +44,7 @@ const getFirstNoteAt = (notes ,author) => {
   return firstValidNote?.created_at ?? null
 }
 
-const getApprovalTimestamp = (notes, requiredApprovals) => {
+const getApprovalTimestamp = (notes) => {
 
   if (!Array.isArray(notes)) return null;
 
@@ -61,10 +66,24 @@ const getApprovalTimestamp = (notes, requiredApprovals) => {
       approvalCount--;
     }
 
-    if (approvalCount >= requiredApprovals) {
+    if (approvalCount >= params.requiredApprovals) {
       return note.created_at;
     }
   }
 
   return null;
+};
+
+const extractReviewers = (notes) => {
+  return [
+    ...new Set(
+      notes
+        .filter( note => 
+          !note.system || 
+          note.body.includes('approved this merge request') || 
+          note.body.includes('unapproved this merge request')
+        ) 
+        .map(note => note.author.name)
+      )
+    ];
 };

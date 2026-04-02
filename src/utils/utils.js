@@ -16,3 +16,34 @@ export const groupByRepo = (mrs) => {
     return acc;
   }, {});
 };
+
+export const buildDevScopes = (mrs) => {
+  const scopes = {};
+
+  const addDev = (dev) => {
+    if (!scopes[dev]) {
+      scopes[dev] = new Set();
+    }
+  };
+
+  mrs.forEach(mr => {
+    const { projectId, author, reviewers } = mr;
+
+    // author contributes
+    const authorName = author.name;
+    addDev(authorName);
+    scopes[authorName].add(projectId);
+
+    // reviewers contribute
+    reviewers.forEach(dev => {
+      addDev(dev);
+      scopes[dev].add(projectId);
+    });
+  });
+
+  Object.keys(scopes).forEach(dev => {
+    scopes[dev] = Array.from(scopes[dev]);
+  });
+
+  return scopes;
+};

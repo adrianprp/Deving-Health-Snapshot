@@ -1,5 +1,6 @@
 import { isValidReviewerFeedback } from "../utils/utils.js";
 import { calcTimeDifference, formatTime } from "../utils/timeUtils.js"
+import { params } from "../config/env.js";
 
 export const average = (arr) => {
   const valid = arr.filter(v => v != null);
@@ -46,43 +47,33 @@ export const calculateWaitingForReview = (mrs) => {
   return { number, culprits }
 };
 
-export const calculateReviewerResponseTime = (
+export const calculateReviewerMetrics = (
   mergeRequests,
-  reviewers
+  devScopes
 ) => {
 
-  const responseData = reviewers.reduce((acc, reviewer) => {
+  const responseData = {};
 
-    const totalReviews =
-      mergeRequests.filter(
-        mr => mr.author.name !== reviewer
-      ).length;
+  params.eligibleAuthors.forEach(reviewer => {
 
-    acc[reviewer] = {
-      times: [],
-      total: totalReviews,
-      interacted: 0,
-      participationRate: 0,
-      average: 0
-    };
+    const reviewerRepos = devScopes[reviewer] || [];
 
-    return acc;
+    const scopedMrs = mergeRequests.filter(
+      mr =>
+        reviewerRepos.includes(mr.projectId) &&
+        mr.author.name !== reviewer
+    );
 
-  }, {});
+    const times = [];
 
-
-  mergeRequests.forEach(mr => {
-
-    reviewers.forEach(reviewer => {
-
-      if (mr.author.name === reviewer) return;
+    scopedMrs.forEach(mr => {
 
       const reviewerNotes = mr.notes
         .filter(note =>
           isValidReviewerFeedback(note, mr.author.name) &&
           note.author.name === reviewer
         )
-        .sort((a,b) =>
+        .sort((a, b) =>
           new Date(a.created_at) -
           new Date(b.created_at)
         );
@@ -95,39 +86,31 @@ export const calculateReviewerResponseTime = (
           reviewer
         );
 
-        responseData[reviewer].times.push(responseTime);
+        times.push(responseTime);
 
       } else {
-
-        responseData[reviewer].times.push(null);
-
+        times.push(null);
       }
 
     });
 
-  });
-
-
-  Object.keys(responseData).forEach(reviewer => {
-
-    const validTimes =
-      responseData[reviewer].times.filter(
-        t => t != null
-      );
-
-    responseData[reviewer].interacted = validTimes.length;
-
-    responseData[reviewer].average =
-      formatTime(average(validTimes));
-
-    responseData[reviewer].participationRate =
-      responseData[reviewer].total
-        ? validTimes.length /
-          responseData[reviewer].total
-        : 0;
+    const validTimes = times.filter(t => t != null);
+    
+    responseData[reviewer] = {
+      repos: reviewerRepos,
+      total: scopedMrs.length,
+      interacted: validTimes.length,
+      participationRate:
+        scopedMrs.length
+          ? validTimes.length / scopedMrs.length
+          : 0,
+      average:
+        validTimes.length
+          ? formatTime(average(validTimes))
+          : null
+    };
 
   });
 
   return responseData;
-
 };

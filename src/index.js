@@ -10,8 +10,8 @@ import { params } from "./config/env.js";
 import { GitLabService } from "./services/gitlabService.js";
 import { normalizeMergeRequests } from "./core/normalizer.js";
 import { enrichMergeRequests } from "./core/enrich.js";
-import { buildFlowSnapshot, buildReviewerSnapshot } from "./core/snapshotBuilder.js";
-import { groupByRepo } from "./utils/utils.js";
+import { buildFlowSnapshot, buildReviewersSnapshot } from "./core/snapshotBuilder.js";
+import { groupByRepo, buildDevScopes } from "./utils/utils.js";
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -64,13 +64,13 @@ const snapshot = (async () => {
 
   const enriched =
     enrichMergeRequests(
-      normalized,
-      params.requiredApprovals
+      normalized
     );
 
 
-  // --- Flow Metrics --- 
   const snapshot = {};
+
+  // --- Flow Metrics --- 
 
   const watchedRepoIds = params.flowIds.map(Number);
 
@@ -95,15 +95,20 @@ const snapshot = (async () => {
     });
   });
 
-  // --- Individual Metrics ---
 
-  const reviewerMrs = enriched.filter(mr =>
+
+  const devScopes = buildDevScopes(enriched);
+
+  const weeklyPeriod = enriched.filter(mr =>
     dayjs(mr.createdAt).isBetween(startDate, endDate, null, "[]")
   );
 
-  snapshot.reviewers = buildReviewerSnapshot({  
-   mrs: reviewerMrs, reviewers: params.eligibleAuthors,
+  // Individual Metrics 
+  snapshot['reviewers'] = buildReviewersSnapshot({
+    mrs: weeklyPeriod,
+    devScopes
   });
+  
 
   console.log(JSON.stringify(snapshot, null, 2));
 
