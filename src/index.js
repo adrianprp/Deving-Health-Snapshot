@@ -1,17 +1,18 @@
-import dayjs from "dayjs";
+import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc.js';
 import timezone from 'dayjs/plugin/timezone.js';
 import businessTime from 'dayjs-business-time';
 import isBetween from 'dayjs/plugin/isBetween.js';
 import minMax from 'dayjs/plugin/minMax.js'
-import pLimit from "p-limit";
+import pLimit from 'p-limit';
 
-import { params } from "./config/env.js";
-import { GitLabService } from "./services/gitlabService.js";
-import { normalizeMergeRequests } from "./core/normalizer.js";
-import { enrichMergeRequests } from "./core/enrich.js";
-import { buildFlowSnapshot, buildReviewersSnapshot } from "./core/snapshotBuilder.js";
-import { groupByRepo, buildDevScopes } from "./utils/utils.js";
+import { params } from './config/env.js';
+import { GitLabService } from './services/gitlabService.js';
+import { normalizeMergeRequests } from './core/normalizer.js';
+import { enrichMergeRequests } from './core/enrich.js';
+import { buildFlowSnapshot, buildReviewersSnapshot, buildStorageSnapshot } from './core/snapshotBuilder.js';
+import { groupByRepo, buildDevScopes } from './utils/utils.js';
+import { saveSnapshot } from './utils/storage.js'
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -112,6 +113,17 @@ const snapshot = (async () => {
 
   console.log(JSON.stringify(snapshot, null, 2));
 
+
+  const storageSnapshot = buildStorageSnapshot({
+    snapshot,
+    startDate,
+    endDate
+  });
+
+  saveSnapshot(storageSnapshot);
+
 });
 
 snapshot();
+
+

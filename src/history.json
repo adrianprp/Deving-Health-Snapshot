@@ -1,0 +1,116 @@
+[
+  {
+    "generatedAt": "2026-04-03",
+    "periodStart": "2026-03-27T18:28:28.790Z",
+    "periodEnd": "2026-04-01T05:28:28.791Z",
+    "flow": {
+      "5156": {
+        "cycleTimeWeekly": 5400000,
+        "cycleTimeBaseline": 26975020.408163264,
+        "pickupTime": 12765000,
+        "reviewTime": 0,
+        "waitingForReview": 0
+      },
+      "5564": {
+        "cycleTimeWeekly": 6210000,
+        "cycleTimeBaseline": 31053750,
+        "pickupTime": 5153684.2105263155,
+        "reviewTime": 4003333.3333333335,
+        "waitingForReview": 2
+      }
+    },
+    "reviewers": {
+      "Adrian Pripon": {
+        "repos": [
+          5156,
+          5564,
+          1501,
+          5526,
+          1189
+        ],
+        "participationRate": 0.06896551724137931,
+        "avgResponseTime": 0,
+        "total": 29,
+        "interacted": 2
+      },
+      "Maria Bumbar": {
+        "repos": [
+          5156,
+          5564,
+          5526
+        ],
+        "participationRate": 0.16,
+        "avgResponseTime": 375000,
+        "total": 25,
+        "interacted": 4
+      },
+      "Liviu Clement": {
+        "repos": [
+          5156,
+          5564
+        ],
+        "participationRate": 0.4166666666666667,
+        "avgResponseTime": 11094000,
+        "total": 24,
+        "interacted": 10
+      }
+    }
+  },
+  {
+    "generatedAt": "2026-04-03",
+    "periodStart": "2026-03-27T18:29:21.190Z",
+    "periodEnd": "2026-04-01T05:29:21.191Z",
+    "flow": {
+      "5156": {
+        "cycleTimeWeekly": 5400000,
+        "cycleTimeBaseline": 26975020.408163264,
+        "pickupTime": 12765000,
+        "reviewTime": 0,
+        "waitingForReview": 0
+      },
+      "5564": {
+        "cycleTimeWeekly": 6210000,
+        "cycleTimeBaseline": 31053750,
+        "pickupTime": 5153684.2105263155,
+        "reviewTime": 4003333.3333333335,
+        "waitingForReview": 2
+      }
+    },
+    "reviewers": {
+      "Adrian Pripon": {
+        "repos": [
+          5156,
+          5564,
+          1501,
+          5526,
+          1189
+        ],
+        "participationRate": 0.06896551724137931,
+        "avgResponseTime": 0,
+        "total": 29,
+        "interacted": 2
+      },
+      "Maria Bumbar": {
+        "repos": [
+          5156,
+          5564,
+          5526
+        ],
+        "participationRate": 0.16,
+        "avgResponseTime": 375000,
+        "total": 25,
+        "interacted": 4
+      },
+      "Liviu Clement": {
+        "repos": [
+          5156,
+          5564
+        ],
+        "participationRate": 0.4166666666666667,
+        "avgResponseTime": 11094000,
+        "total": 24,
+        "interacted": 10
+      }
+    }
+  }
+]
