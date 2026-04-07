@@ -2,6 +2,7 @@ import { calcTimeDifference } from "../utils/timeUtils.js";
 import { isValidReviewerFeedback } from "../utils/utils.js"
 import { params } from "../config/env.js";
 
+
 export const enrichMergeRequests = (mrs) => {
 
   return mrs.map(mr => {
@@ -66,7 +67,7 @@ const getApprovalTimestamp = (notes) => {
       approvalCount--;
     }
 
-    if (approvalCount >= params.requiredApprovals) {
+    if (approvalCount >= params.gitlab.requiredApprovals) {
       return note.created_at;
     }
   }

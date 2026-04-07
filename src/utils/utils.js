@@ -1,3 +1,5 @@
+import dayjs from "dayjs";
+
 export const isValidReviewerFeedback = (note, author) =>
     // A valid note for feedback time, is a note created by another team member, non system, unless is the one about approving a MR.
     (!note.system && note.author.name !== author) ||
@@ -46,4 +48,91 @@ export const buildDevScopes = (mrs) => {
   });
 
   return scopes;
+};
+
+export const emailToName = (email) => {
+  if (!email) return null;
+
+  const [local] = email.split('@');
+
+  return local
+    .split('.')
+    .map(part =>
+      part.charAt(0).toUpperCase() + part.slice(1)
+    )
+    .join(' ');
+};
+
+export const buildUnifiedDevs = ({ reviewers, estimations }) => {
+
+  const devs = {};
+
+  Object.entries(reviewers).forEach(([name, reviewData]) => {
+    devs[name] = {
+      review: reviewData,
+      estimation: null
+    };
+  });
+  
+  estimations.forEach(dev => {
+    const { name, ...estimationData } = dev;
+
+    if (!devs[name]) {
+      devs[name] = {
+        review: null,
+        estimation: estimationData
+      };
+    } else {
+      devs[name].estimation = estimationData;
+    }
+  });
+
+  return devs;
+};
+
+
+export const buildStorage = ({
+  snapshot,
+  startDate,
+  endDate
+}) => {
+
+  const storageSnapshot = {
+    generatedAt: dayjs().format("YYYY-MM-DD"),
+    periodStart: startDate.toISOString(),
+    periodEnd: endDate.toISOString(),
+    flow: {},
+    reviewers: {}
+  };
+
+  Object.entries(snapshot)
+    .filter(([key]) => key !== "reviewers")
+    .forEach(([repo, data]) => {
+
+      storageSnapshot.flow[repo] = {
+        cycleTimeWeekly: data.flow.cycleTime.weekly.milliseconds,
+        cycleTimeBaseline: data.flow.cycleTime.baseline90d.milliseconds,
+        pickupTime: data.flow.pickupTime.milliseconds,
+        reviewTime: data.flow.reviewTime.milliseconds,
+        waitingForReview: data.flow.waitingForReview.number
+      };
+
+    });
+
+
+  const reviewerMetrics = snapshot.reviewers?.reviewerMetrics || {};
+
+  Object.entries(reviewerMetrics).forEach(([dev, data]) => {
+
+    storageSnapshot.reviewers[dev] = {
+      repos: data.repos, 
+      participationRate: data.participationRate,
+      avgResponseTime: data.average.milliseconds,
+      total: data.total,
+      interacted: data.interacted
+    };
+
+  });
+
+  return storageSnapshot;
 };

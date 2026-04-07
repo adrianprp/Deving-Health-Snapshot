@@ -1,32 +1,42 @@
+'use strict';
+
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc.js';
 import timezone from 'dayjs/plugin/timezone.js';
 import businessTime from 'dayjs-business-time';
 import isBetween from 'dayjs/plugin/isBetween.js';
-import minMax from 'dayjs/plugin/minMax.js'
+import minMax from 'dayjs/plugin/minMax.js';
 import pLimit from 'p-limit';
 
 import { params } from './config/env.js';
+
 import { GitLabService } from './services/gitlabService.js';
+import { JiraService } from './services/jiraService.js';
 import { normalizeMergeRequests } from './core/normalizer.js';
 import { enrichMergeRequests } from './core/enrich.js';
-import { buildFlowSnapshot, buildReviewersSnapshot, buildStorageSnapshot } from './core/snapshotBuilder.js';
-import { groupByRepo, buildDevScopes } from './utils/utils.js';
-import { saveSnapshot } from './utils/storage.js'
+import { calculateEstimateAccuracy } from './core/metrics.js';
+
+import { buildFlowSnapshot, buildReviewersSnapshot } from './core/snapshotBuilder.js';
+
+import { groupByRepo, buildDevScopes, emailToName, buildUnifiedDevs } from './utils/utils.js';
+import { buildEmailHtml } from './utils/htmlBuilder.js';
+
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.extend(businessTime);
 dayjs.extend(isBetween);
-dayjs.extend(minMax)
+dayjs.extend(minMax);
 
-const snapshot = (async () => {
+const snapshot = async () => {
 
-  // Weekly Span of time
+  /* ==== GITLAB ==== */
+
   const startDate = dayjs()
     .startOf('isoWeek')
     .subtract(1, 'week')
     .add(8, 'hour');
+
   const endDate = dayjs()
     .startOf('isoWeek')
     .subtract(1, 'week')
@@ -40,14 +50,14 @@ const snapshot = (async () => {
   const presentDate = dayjs();
 
   const gitlab = new GitLabService(
-    params.url,
-    params.token
+    params.gitlab.url,
+    params.gitlab.token
   );
 
   const limit = pLimit(5);
 
   const results = await Promise.all(
-    params.projectIds.map(id =>
+    params.gitlab.projectIds.map(id =>
       limit(() =>
         gitlab.getMergeRequests(
           id,
@@ -58,22 +68,17 @@ const snapshot = (async () => {
       )
     )
   );
+
   const rawMrs = results.flat();
 
-  const normalized =
-    normalizeMergeRequests(rawMrs);
-
-  const enriched =
-    enrichMergeRequests(
-      normalized
-    );
-
+  const normalized = normalizeMergeRequests(rawMrs);
+  const enriched = enrichMergeRequests(normalized);
 
   const snapshot = {};
 
-  // --- Flow Metrics --- 
+  /* FLOW METRICS */
 
-  const watchedRepoIds = params.flowIds.map(Number);
+  const watchedRepoIds = params.gitlab.flowIds.map(Number);
 
   const watchedMrs = enriched.filter(mr =>
     watchedRepoIds.includes(mr.projectId)
@@ -81,11 +86,11 @@ const snapshot = (async () => {
 
   const groupedByRepo = groupByRepo(watchedMrs);
 
-  params.flowIds.forEach((id) => {
-    const mrs = groupedByRepo[id];
+  params.gitlab.flowIds.forEach((id) => {
+    const mrs = groupedByRepo[id] || [];
 
     const rollingWindowMrs = mrs;
-  
+
     const currentPeriodMrs = mrs.filter(mr =>
       dayjs(mr.createdAt).isBetween(startDate, endDate, null, "[]")
     );
@@ -96,7 +101,7 @@ const snapshot = (async () => {
     });
   });
 
-
+  /* REVIEWERS */
 
   const devScopes = buildDevScopes(enriched);
 
@@ -104,26 +109,56 @@ const snapshot = (async () => {
     dayjs(mr.createdAt).isBetween(startDate, endDate, null, "[]")
   );
 
-  // Individual Metrics 
-  snapshot['reviewers'] = buildReviewersSnapshot({
+  const reviewerSnapshot = buildReviewersSnapshot({
     mrs: weeklyPeriod,
     devScopes
+  }).reviewerMetrics;
+
+  /* ==== JIRA ====  */
+
+  const jira = new JiraService(
+    params.jira.domain,
+    params.jira.email,
+    params.jira.token
+  );
+
+  const jiraData = await Promise.all(
+    params.users.map(async (email) => {
+      const accountId = await jira.getAccountId(email);
+      const tickets = await jira.getDevStats(
+        accountId,
+        params.jira.projectKey
+      );
+
+      return {
+        email,
+        accountId,
+        tickets
+      };
+    })
+  );
+
+  const estimationSnapshot = jiraData.map(dev => ({
+    email: dev.email,
+    name: emailToName(dev.email),
+    ...calculateEstimateAccuracy(dev.tickets)
+  }));
+
+  const devs = buildUnifiedDevs({
+    reviewers: reviewerSnapshot,
+    estimations: estimationSnapshot
   });
-  
+
+  snapshot['devs'] = devs;
 
   console.log(JSON.stringify(snapshot, null, 2));
 
 
-  const storageSnapshot = buildStorageSnapshot({
-    snapshot,
-    startDate,
-    endDate
-  });
 
-  saveSnapshot(storageSnapshot);
 
-});
+const html = buildEmailHtml(snapshot);
+
+console.log(html);
+};
 
 snapshot();
-
-

@@ -1,6 +1,5 @@
 import * as metrics from "./metrics.js";
 import { formatTime } from "../utils/timeUtils.js";
-import dayjs from "dayjs";
 
 export const buildFlowSnapshot = ({
   rollingWindowMrs,
@@ -73,48 +72,4 @@ export const buildReviewersSnapshot = ({
   }
 };
 
-export const buildStorageSnapshot = ({
-  snapshot,
-  startDate,
-  endDate
-}) => {
 
-  const storageSnapshot = {
-    generatedAt: dayjs().format("YYYY-MM-DD"),
-    periodStart: startDate.toISOString(),
-    periodEnd: endDate.toISOString(),
-    flow: {},
-    reviewers: {}
-  };
-
-  Object.entries(snapshot)
-    .filter(([key]) => key !== "reviewers")
-    .forEach(([repo, data]) => {
-
-      storageSnapshot.flow[repo] = {
-        cycleTimeWeekly: data.flow.cycleTime.weekly.milliseconds,
-        cycleTimeBaseline: data.flow.cycleTime.baseline90d.milliseconds,
-        pickupTime: data.flow.pickupTime.milliseconds,
-        reviewTime: data.flow.reviewTime.milliseconds,
-        waitingForReview: data.flow.waitingForReview.number
-      };
-
-    });
-
-
-  const reviewerMetrics = snapshot.reviewers?.reviewerMetrics || {};
-
-  Object.entries(reviewerMetrics).forEach(([dev, data]) => {
-
-    storageSnapshot.reviewers[dev] = {
-      repos: data.repos, 
-      participationRate: data.participationRate,
-      avgResponseTime: data.average.milliseconds,
-      total: data.total,
-      interacted: data.interacted
-    };
-
-  });
-
-  return storageSnapshot;
-};
