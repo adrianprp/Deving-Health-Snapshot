@@ -3,6 +3,8 @@ import { emailToName } from '../utils/utils.js';
 
 export const params = {
   users: process.env.USERS.split(','),
+  ccList: process.env.CC_LIST, 
+  emailList: process.env.EMAIL_LIST,
   gitlab : {
     token: process.env.GITLAB_TOKEN,
     url: process.env.GITLAB_URL,

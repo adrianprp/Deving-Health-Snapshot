@@ -19,7 +19,8 @@ import { calculateEstimateAccuracy } from './core/metrics.js';
 import { buildFlowSnapshot, buildReviewersSnapshot } from './core/snapshotBuilder.js';
 
 import { groupByRepo, buildDevScopes, emailToName, buildUnifiedDevs } from './utils/utils.js';
-import { buildEmailHtml } from './utils/htmlBuilder.js';
+import { buildHtml, buildDevHtml } from './utils/htmlBuilder.js';
+import { Mailer } from './services/mailService.js';
 
 
 dayjs.extend(utc);
@@ -86,7 +87,11 @@ const snapshot = async () => {
 
   const groupedByRepo = groupByRepo(watchedMrs);
 
-  params.gitlab.flowIds.forEach((id) => {
+  params.gitlab.flowIds.forEach( async (id) => {
+    const project =  await gitlab.getProject(id);
+    const projectName = project.name;
+    const projectUrl = project.http_url_to_repo;
+  
     const mrs = groupedByRepo[id] || [];
 
     const rollingWindowMrs = mrs;
@@ -95,10 +100,12 @@ const snapshot = async () => {
       dayjs(mr.createdAt).isBetween(startDate, endDate, null, "[]")
     );
 
-    snapshot[id] = buildFlowSnapshot({
+    snapshot[projectName] = buildFlowSnapshot({
       rollingWindowMrs,
       currentPeriodMrs,
     });
+
+    snapshot[projectName].url = projectUrl;
   });
 
   /* REVIEWERS */
@@ -153,12 +160,31 @@ const snapshot = async () => {
 
   console.log(JSON.stringify(snapshot, null, 2));
 
+  const fullReport = buildHtml(snapshot);
+  await Mailer.sendMail(
+    '',
+    params.emailList,
+    params.ccList,
+    'Products Team Dev Health Snapshot',
+    fullReport
+  );
 
+  
+  for (const email of params.users) {
 
+    const devName = emailToName(email);
+    const html = buildDevHtml(snapshot, devName);
+    console.log(html);
+    await mailer.sendMail(
+      '',
+      email,
+      '',
+      `Your Dev Health Snapshot`,
+      html
+    );
+    console.log(`Sent dev report → ${devName}`);
+  }
 
-const html = buildEmailHtml(snapshot);
-
-console.log(html);
 };
 
 snapshot();

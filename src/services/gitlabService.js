@@ -86,4 +86,10 @@ export class GitLabService {
 		const url = `${this.url}api/v4/projects/${projectId}/merge_requests/${mergeReqId}/discussions?per_page=100`;
 		return this.getPaginated(url);
 	}
+
+	async getProject(projectId) {
+		const url = `${this.url}api/v4/projects/${encodeURIComponent(projectId)}`;
+		const res = await this.safeFetch(url);
+		return res.json();
+	}
 }
