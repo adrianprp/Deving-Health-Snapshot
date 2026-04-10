@@ -165,7 +165,7 @@ const snapshot = async () => {
   /* ==== EMAILS ====  */
   const fullReport = buildHtml(snapshot, startDate, endDate);
   console.log(fullReport)
-  await Mailer.sendMail(
+  await new Mailer().sendMail(
     '',
     params.emailList,
     params.ccList,
@@ -178,7 +178,7 @@ const snapshot = async () => {
 
     const devName = emailToName(email);
     const html = buildDevHtml(snapshot, devName, startDate, endDate);
-    await mailer.sendMail(
+    await new Mailer().sendMail(
       '',
       email,
       '',
