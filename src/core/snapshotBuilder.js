@@ -12,27 +12,28 @@ export const buildFlowSnapshot = ({
 
   // 90 day baseline
   const cycleTime90d =
-    metrics.calculateAverageReviewCycleTime(
+    metrics.calculateReviewCycleStats(
       rollingWindowMrs
     );
 
   // weekly performance
   const weeklyCycleTime =
-    metrics.calculateAverageReviewCycleTime(
+    metrics.calculateReviewCycleStats(
       currentPeriodMrs
     );
 
   // trend vs baseline
   const cycleTrend =
-    weeklyCycleTime - cycleTime90d;
+    (weeklyCycleTime.medianRaw ?? 0) -
+    (cycleTime90d.medianRaw ?? 0);
 
-  const avgPickupTime =
-    metrics.calculateAveragePickupTime(
+  const pickupTime =
+    metrics.calculatePickupTimeStats(
       currentPeriodMrs
     );
 
-  const avgReviewTime =
-    metrics.calculateAverageReviewTime(
+  const reviewTime =
+    metrics.calculateReviewTimeStats(
       currentPeriodMrs
     );
 
@@ -44,12 +45,12 @@ export const buildFlowSnapshot = ({
   return {
     flow: {
       cycleTime: {
-        baseline90d: formatTime(cycleTime90d),
-        weekly: formatTime(weeklyCycleTime),
+        baseline90d: cycleTime90d,
+        weekly: weeklyCycleTime,
         trend: formatTime(cycleTrend)
       },
-      pickupTime: formatTime(avgPickupTime),
-      reviewTime: formatTime(avgReviewTime),
+      pickupTime,
+      reviewTime,
       waitingForReview
     },
   }
@@ -71,5 +72,3 @@ export const buildReviewersSnapshot = ({
     reviewerMetrics
   }
 };
-
-

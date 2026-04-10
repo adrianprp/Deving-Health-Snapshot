@@ -11,7 +11,7 @@ export const enrichMergeRequests = (mrs) => {
       mr.notes
     );
 
-    const reviewDoneTimestamp = calcTimeDifference(
+    const reviewCycleDuration = calcTimeDifference(
       mr.createdAt,
       approvalTimestamp ?? mr.mergedAt ?? null,
       mr.author.name
@@ -30,7 +30,7 @@ export const enrichMergeRequests = (mrs) => {
       ...mr,
       firstNonAuthorNoteAt,
       approvalTimestamp,
-      reviewDoneTimestamp,
+      reviewCycleDuration,
       reviewers
     };
   });

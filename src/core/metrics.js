@@ -1,41 +1,76 @@
 import { isValidReviewerFeedback } from "../utils/utils.js";
-import { calcTimeDifference, formatTime } from "../utils/timeUtils.js"
+import { calcTimeDifference, formatTime } from "../utils/timeUtils.js";
 import { params, USERS } from "../config/env.js";
 
-/* ---- GITLAB  ---- */
+/* ---- UTILS ---- */
+
 export const average = (arr) => {
   const valid = arr.filter(v => v != null);
   if (!valid.length) return 0;
-  return valid.reduce((a,b)=> a+b, 0) / valid.length;
+  return valid.reduce((a, b) => a + b, 0) / valid.length;
 };
 
-export const calculateAverageReviewCycleTime = (mrs) =>
-  average(mrs.map(mr => mr.reviewDoneTimestamp));
+export const percentile = (arr, p) => {
+  const valid = arr.filter(v => v != null).sort((a, b) => a - b);
+  if (!valid.length) return 0;
 
+  const index = (valid.length - 1) * p;
+  const lower = Math.floor(index);
+  const upper = Math.ceil(index);
 
-export const calculateAveragePickupTime = (mrs) => { 
-  return average(
-    mrs.map(mr => 
-          calcTimeDifference(
-          mr.createdAt,
-          mr.firstNonAuthorNoteAt,
-          mr.author.name
-        )
-      )
+  if (lower === upper) return valid[lower];
+
+  return valid[lower] + (valid[upper] - valid[lower]) * (index - lower);
+};
+
+export const median = (arr) => percentile(arr, 0.5);
+export const p90 = (arr) => percentile(arr, 0.9);
+
+/* ---- GITLAB ---- */
+
+export const calculateReviewCycleStats = (mrs) => {
+  const times = mrs.map(mr => mr.reviewCycleDuration);
+
+  return {
+    median: formatTime(median(times)),
+    p90: formatTime(p90(times)),
+    average: formatTime(average(times)),
+    medianRaw: median(times)
+  };
+};
+
+export const calculatePickupTimeStats = (mrs) => {
+  const times = mrs.map(mr =>
+    calcTimeDifference(
+      mr.createdAt,
+      mr.firstNonAuthorNoteAt,
+      mr.author.name
+    )
   );
-}
 
-export const calculateAverageReviewTime = (mrs) => { 
-  return average(
-    mrs.map(mr => 
-          calcTimeDifference(
-          mr.firstNonAuthorNoteAt,
-          mr.approvalTimestamp ?? mr.mergedAt,
-          mr.author.name
-        )
-      )
+  return {
+    median: formatTime(median(times)),
+    p90: formatTime(p90(times)),
+    average: formatTime(average(times)),
+    medianRaw: median(times)
+  };
+};
+
+export const calculateReviewTimeStats = (mrs) => {
+  const times = mrs.map(mr =>
+    calcTimeDifference(
+      mr.firstNonAuthorNoteAt,
+      mr.approvalTimestamp ?? mr.mergedAt,
+      mr.author.name
+    )
   );
-}
+  return {
+    median: formatTime(median(times)),
+    p90: formatTime(p90(times)),
+    average: formatTime(average(times)),
+    medianRaw: median(times),
+  };
+};
 
 export const calculateWaitingForReview = (mrs) => {
   const culprits = mrs
@@ -45,7 +80,7 @@ export const calculateWaitingForReview = (mrs) => {
     !mr.firstNonAuthorNoteAt
   ).map(mr => mr.url);
   const number = culprits.length;
-  return { number, culprits }
+  return { number, culprits };
 };
 
 export const calculateReviewerMetrics = (
@@ -96,7 +131,7 @@ export const calculateReviewerMetrics = (
     });
 
     const validTimes = times.filter(t => t != null);
-    
+
     responseData[reviewer] = {
       repos: reviewerRepos,
       total: scopedMrs.length,
@@ -105,10 +140,18 @@ export const calculateReviewerMetrics = (
         scopedMrs.length
           ? validTimes.length / scopedMrs.length
           : 0,
+      median:
+        validTimes.length
+          ? formatTime(median(validTimes))
+          : null,
+      p90:
+        validTimes.length
+          ? formatTime(p90(validTimes))
+          : null,
       average:
         validTimes.length
           ? formatTime(average(validTimes))
-          : null
+          : null,
     };
 
   });
@@ -117,7 +160,7 @@ export const calculateReviewerMetrics = (
 };
 
 
-/* ---- JIRA  ---- */
+/* ---- JIRA ---- */
 
 export const calculateEstimateAccuracy = (issues) => {
   const devStats = {};
@@ -182,9 +225,19 @@ export const calculateEstimateAccuracy = (issues) => {
       ? (s.withinKpi / s.withEstimate) * 100
       : 0;
 
-    const avgDev = s.deviations.length
-      ? (s.deviations.reduce((a, b) => a + b, 0) / s.deviations.length) * 100
-      : 0;
+  const deviations = s.deviations;
+
+  const avgDev = deviations.length
+    ? average(deviations) * 100
+    : 0;
+
+  const medianDev = deviations.length
+    ? median(deviations) * 100
+    : 0;
+
+  const p90Dev = deviations.length
+    ? p90(deviations) * 100
+    : 0;
 
     return {
       developer: dev,
@@ -193,7 +246,11 @@ export const calculateEstimateAccuracy = (issues) => {
       withEstimate: s.withEstimate,
       withoutEstimate: s.withoutEstimate,
       majorMisses: s.majorMisses,
-      avgDeviation: Number(avgDev.toFixed(1))
+      deviation: {
+        medianDev: Number(medianDev.toFixed(1)),
+        p90Dev: Number(p90Dev.toFixed(1)),
+        avgDev: Number(avgDev.toFixed(1))
+      }
     };
   });
 

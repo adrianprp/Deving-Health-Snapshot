@@ -6,6 +6,7 @@ import timezone from 'dayjs/plugin/timezone.js';
 import businessTime from 'dayjs-business-time';
 import isBetween from 'dayjs/plugin/isBetween.js';
 import minMax from 'dayjs/plugin/minMax.js';
+import isoWeek from 'dayjs/plugin/isoWeek.js';
 import pLimit from 'p-limit';
 
 import { params } from './config/env.js';
@@ -22,7 +23,7 @@ import { groupByRepo, buildDevScopes, emailToName, buildUnifiedDevs } from './ut
 import { buildHtml, buildDevHtml } from './utils/htmlBuilder.js';
 import { Mailer } from './services/mailService.js';
 
-
+dayjs.extend(isoWeek)
 dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.extend(businessTime);
@@ -160,7 +161,10 @@ const snapshot = async () => {
 
   console.log(JSON.stringify(snapshot, null, 2));
 
-  const fullReport = buildHtml(snapshot);
+
+  /* ==== EMAILS ====  */
+  const fullReport = buildHtml(snapshot, startDate, endDate);
+  console.log(fullReport)
   await Mailer.sendMail(
     '',
     params.emailList,
@@ -173,8 +177,7 @@ const snapshot = async () => {
   for (const email of params.users) {
 
     const devName = emailToName(email);
-    const html = buildDevHtml(snapshot, devName);
-    console.log(html);
+    const html = buildDevHtml(snapshot, devName, startDate, endDate);
     await mailer.sendMail(
       '',
       email,
@@ -184,7 +187,6 @@ const snapshot = async () => {
     );
     console.log(`Sent dev report → ${devName}`);
   }
-
 };
 
 snapshot();
