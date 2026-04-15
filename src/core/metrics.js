@@ -116,13 +116,13 @@ export const calculateReviewerMetrics = (
 
       if (reviewerNotes.length) {
 
-        const responseTime = calcTimeDifference(
+        const pickupTime = calcTimeDifference(
           mr.createdAt,
           reviewerNotes[0].created_at,
           reviewer
         );
 
-        times.push(responseTime);
+        times.push(pickupTime);
 
       } else {
         times.push(null);
@@ -140,18 +140,20 @@ export const calculateReviewerMetrics = (
         scopedMrs.length
           ? validTimes.length / scopedMrs.length
           : 0,
-      median:
-        validTimes.length
-          ? formatTime(median(validTimes))
-          : null,
-      p90:
-        validTimes.length
-          ? formatTime(p90(validTimes))
-          : null,
-      average:
-        validTimes.length
-          ? formatTime(average(validTimes))
-          : null,
+      pickupTime: {
+        median:
+          validTimes.length
+            ? formatTime(median(validTimes))
+            : null,
+        p90:
+          validTimes.length
+            ? formatTime(p90(validTimes))
+            : null,
+        average:
+          validTimes.length
+            ? formatTime(average(validTimes))
+            : null,
+      }    
     };
 
   });
@@ -165,6 +167,7 @@ export const calculateReviewerMetrics = (
 export const calculateEstimateAccuracy = (issues) => {
   const devStats = {};
   const taskDetails = [];
+  
 
   issues.forEach(issue => {
     const dev = issue.developer || 'Unknown';
@@ -188,7 +191,7 @@ export const calculateEstimateAccuracy = (issues) => {
     stat.total++;
 
     let deviation = null;
-    let status = 'NO_ESTIMATE';
+    let estimationStatus = 'NO_ESTIMATE';
 
     if (!estimate || estimate === 0) {
       stat.withoutEstimate++;
@@ -200,23 +203,23 @@ export const calculateEstimateAccuracy = (issues) => {
 
       if (deviation <= 0.2) {
         stat.withinKpi++;
-        status = 'OK';
+        estimationStatus = 'OK';
       } else if (deviation > 0.5) {
         stat.majorMisses++;
-        status = 'MAJOR_MISS';
+        estimationStatus = 'MAJOR_MISS';
       } else {
-        status = 'MINOR_MISS';
+        estimationStatus = 'MINOR_MISS';
       }
     }
 
     taskDetails.push({
       key: issue.key,
       summary: issue.summary,
-      developer: dev,
       estimate,
       actual,
       deviation: deviation !== null ? Number((deviation * 100).toFixed(1)) : null,
-      status
+      estimationStatus,
+      status: issue.status
     });
   });
 
@@ -254,8 +257,28 @@ export const calculateEstimateAccuracy = (issues) => {
     };
   });
 
+  const DEV_DONE_STATUSES = new Set([
+    'done',
+    'ready for dev',
+    'testing on stage',
+    'test passed on stage',
+    'testing on prod',
+    'prod testing'
+  ]);
+
+  const kpiEligibleIssues = taskDetails.filter(issue =>
+    DEV_DONE_STATUSES.has(issue.status.trim().toLowerCase())
+  );
+
+  const inProgressIssues = taskDetails.filter(issue =>
+    !DEV_DONE_STATUSES.has(issue.status.trim().toLowerCase())
+  );
+
   return {
     devMetrics,
-    taskDetails
+    taskDetails: {
+      kpiEligibleIssues,
+      inProgressIssues
+    }
   };
 };

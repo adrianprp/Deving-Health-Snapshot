@@ -25,6 +25,7 @@ const sc = (s) => {
   if (s === 'OK') return { bg:'#e6f4ea', fg:'#1a6e2e', label:'OK' };
   if (s === 'MAJOR_MISS') return { bg:'#fce8e6', fg:'#b31412', label:'Major miss' };
   if (s === 'MINOR_MISS') return { bg:'#fef7e0', fg:'#8a5000', label:'Minor miss' };
+  if (s === 'NO_ESTIMATE') return { bg:'#f1f3f4', fg:'#5f6368', label:'No estimate' };
   return { bg:'#f1f3f4', fg:'#5f6368', label: s };
 };
 
@@ -62,8 +63,66 @@ const scorecard = (label, big, bigColor, barPct, barColor, sub) => {
   </table>`;
 };
 
+const TABLE_HEADER = `<tr style="background:#f8f9fa;">
+  <th style="padding:7px 10px;font-size:10px;color:#9e9e9e;font-weight:600;text-align:left;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">Key</th>
+  <th style="padding:7px 10px;font-size:10px;color:#9e9e9e;font-weight:600;text-align:left;text-transform:uppercase;letter-spacing:0.5px;">Task</th>
+  <th style="padding:7px 10px;font-size:10px;color:#9e9e9e;font-weight:600;text-align:center;text-transform:uppercase;letter-spacing:0.5px;">Est.</th>
+  <th style="padding:7px 10px;font-size:10px;color:#9e9e9e;font-weight:600;text-align:center;text-transform:uppercase;letter-spacing:0.5px;">Actual</th>
+  <th style="padding:7px 10px;font-size:10px;color:#9e9e9e;font-weight:600;text-align:center;text-transform:uppercase;letter-spacing:0.5px;">Dev.</th>
+  <th style="padding:7px 10px;font-size:10px;color:#9e9e9e;font-weight:600;text-align:center;text-transform:uppercase;letter-spacing:0.5px;">Est. Status</th>
+</tr>`;
+
+const buildTaskRow = (t) => {
+  const s = sc(t.estimationStatus);
+  const url = `https://everymatrix.atlassian.net/browse/${t.key}`;
+  const devDisplay = t.deviation != null ? t.deviation.toFixed(0) + '%' : '—';
+  const actualDisplay = t.actual != null ? parseFloat(t.actual).toFixed(1) + 'h' : '—';
+  const estimateDisplay = t.estimate != null ? t.estimate + 'h' : '—';
+  return `<tr>
+    <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;white-space:nowrap;">
+      <a href="${url}" style="font-size:11px;color:#1a73e8;text-decoration:none;font-family:monospace;">${t.key}</a>
+    </td>
+    <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;font-size:12px;color:#202124;">${t.summary}</td>
+    <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;font-size:12px;color:#202124;text-align:center;white-space:nowrap;">${estimateDisplay}</td>
+    <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;font-size:12px;color:#202124;text-align:center;white-space:nowrap;">${actualDisplay}</td>
+    <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;font-size:12px;text-align:center;white-space:nowrap;">${devDisplay}</td>
+    <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;text-align:center;white-space:nowrap;">
+      <span style="background:${s.bg};color:${s.fg};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">${s.label}</span>
+    </td>
+  </tr>`;
+};
+
+const buildTaskTables = (taskDetails) => {
+  const kpiIssues = taskDetails?.kpiEligibleIssues || [];
+  const inProgressIssues = taskDetails?.inProgressIssues || [];
+
+  const kpiSection = kpiIssues.length > 0 ? `
+    <tr><td colspan="7" style="padding:6px 10px 4px;background:#f0f4ff;border-bottom:1px solid #e8eaed;">
+      <span style="font-size:10px;font-weight:700;color:#1a73e8;text-transform:uppercase;letter-spacing:0.6px;">
+        ✦ KPI Eligible Issues
+      </span>
+    </td></tr>
+    ${kpiIssues.map(buildTaskRow).join('')}
+  ` : '';
+
+  const inProgressSection = inProgressIssues.length > 0 ? `
+    <tr><td colspan="7" style="padding:6px 10px 4px;background:#fff8e1;border-bottom:1px solid #e8eaed;border-top:2px solid #e8eaed;">
+      <span style="font-size:10px;font-weight:700;color:#8a5000;text-transform:uppercase;letter-spacing:0.6px;">
+        ◎ In Progress Issues
+      </span>
+    </td></tr>
+    ${inProgressIssues.map(buildTaskRow).join('')}
+  ` : '';
+
+  return `<table cellpadding="0" cellspacing="0" width="100%">
+    ${TABLE_HEADER}
+    ${kpiSection}
+    ${inProgressSection}
+  </table>`;
+};
+
 export const buildHtml = (report, startDate, endDate) => {
-  const date =  `${dayjs(startDate).format('dddd, MMMM D')} - ${dayjs(endDate).format('dddd, MMMM D')}`;
+  const date = `${dayjs(startDate).format('dddd, MMMM D')} - ${dayjs(endDate).format('dddd, MMMM D')}`;
   const repos = Object.entries(report).filter(([k]) => k !== 'devs');
   const devs = report.devs || {};
 
@@ -106,7 +165,7 @@ export const buildHtml = (report, startDate, endDate) => {
     const ks = kpiStyle(kpi);
     const ps = partStyle(rev.participationRate || 0);
     const partPct = Math.round((rev.participationRate || 0) * 100);
-    const tasks = est.taskDetails || [];
+    const taskDetails = est.taskDetails || [];
 
     const cards4 = `
     <table cellpadding="0" cellspacing="0" width="100%"><tr>
@@ -121,9 +180,9 @@ export const buildHtml = (report, startDate, endDate) => {
       <td width="25%" style="padding-right:8px;vertical-align:top;">
         <table cellpadding="0" cellspacing="0" width="100%" style="background:#f8f9fa;border-radius:6px;border:1px solid #e8eaed;">
           <tr><td style="padding:10px 12px;">
-            <div style="font-size:10px;color:#9e9e9e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Review time</div>
-            <div style="font-size:22px;font-weight:700;color:#202124;line-height:1.1;">${fmt(rev.median)}</div>
-            <div style="font-size:10px;color:#9e9e9e;margin-top:11px;">p90 ${fmt(rev.p90)} · avg ${fmt(rev.average)}</div>
+            <div style="font-size:10px;color:#9e9e9e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Pickup time</div>
+            <div style="font-size:22px;font-weight:700;color:#202124;line-height:1.1;">${fmt(rev.pickupTime.median)}</div>
+            <div style="font-size:10px;color:#9e9e9e;margin-top:11px;">p90 ${fmt(rev.pickupTime.p90)} · avg ${fmt(rev.pickupTime.average)}</div>
           </td></tr>
         </table>
       </td>
@@ -138,40 +197,13 @@ export const buildHtml = (report, startDate, endDate) => {
       </td>
     </tr></table>`;
 
-    const taskRows = tasks.map((t) => {
-      const s = sc(t.status);
-      const url = `https://everymatrix.atlassian.net/browse/${t.key}`;
-      return `<tr>
-        <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;white-space:nowrap;">
-          <a href="${url}" style="font-size:11px;color:#1a73e8;text-decoration:none;font-family:monospace;">${t.key}</a>
-        </td>
-        <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;font-size:12px;color:#202124;">${t.summary}</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;font-size:12px;color:#202124;text-align:center;white-space:nowrap;">${t.estimate}h</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;font-size:12px;color:#202124;text-align:center;white-space:nowrap;">${parseFloat(t.actual).toFixed(1)}h</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;font-size:12px;text-align:center;white-space:nowrap;">${t.deviation.toFixed(0)}%</td>
-        <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;text-align:center;white-space:nowrap;">
-          <span style="background:${s.bg};color:${s.fg};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">${s.label}</span>
-        </td>
-      </tr>`;
-    }).join('');
-
     return `<table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:14px;border:1px solid #e8eaed;border-radius:8px;overflow:hidden;">
       <tr><td style="padding:12px 16px;border-bottom:1px solid #e8eaed;">
         <span style="font-size:14px;font-weight:700;color:#202124;">${name}</span>
       </td></tr>
       <tr><td style="padding:12px 16px;border-bottom:1px solid #e8eaed;">${cards4}</td></tr>
       <tr style="background:#f8f9fa;"><td style="padding:0;">
-        <table cellpadding="0" cellspacing="0" width="100%">
-          <tr>
-            <th style="padding:7px 10px;font-size:10px;color:#9e9e9e;font-weight:600;text-align:left;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;">Key</th>
-            <th style="padding:7px 10px;font-size:10px;color:#9e9e9e;font-weight:600;text-align:left;text-transform:uppercase;letter-spacing:0.5px;">Task</th>
-            <th style="padding:7px 10px;font-size:10px;color:#9e9e9e;font-weight:600;text-align:center;text-transform:uppercase;letter-spacing:0.5px;">Est.</th>
-            <th style="padding:7px 10px;font-size:10px;color:#9e9e9e;font-weight:600;text-align:center;text-transform:uppercase;letter-spacing:0.5px;">Actual</th>
-            <th style="padding:7px 10px;font-size:10px;color:#9e9e9e;font-weight:600;text-align:center;text-transform:uppercase;letter-spacing:0.5px;">Dev.</th>
-            <th style="padding:7px 10px;font-size:10px;color:#9e9e9e;font-weight:600;text-align:center;text-transform:uppercase;letter-spacing:0.5px;">Status</th>
-          </tr>
-          ${taskRows}
-        </table>
+        ${buildTaskTables(taskDetails)}
       </td></tr>
     </table>`;
   }).join('');
@@ -215,7 +247,7 @@ export const buildHtml = (report, startDate, endDate) => {
 
 
 export const buildDevHtml = (report, devName, startDate, endDate) => {
-  const date =  `${dayjs(startDate).format('dddd, MMMM D')} - ${dayjs(endDate).format('dddd, MMMM D')}`;
+  const date = `${dayjs(startDate).format('dddd, MMMM D')} - ${dayjs(endDate).format('dddd, MMMM D')}`;
 
   const d = report.devs?.[devName];
 
@@ -231,7 +263,7 @@ export const buildDevHtml = (report, devName, startDate, endDate) => {
   const ks = kpiStyle(kpi);
   const ps = partStyle(rev.participationRate || 0);
   const partPct = Math.round((rev.participationRate || 0) * 100);
-  const tasks = est.taskDetails || [];
+  const taskDetails = est.taskDetails || [];
 
   const cards4 = `
   <table cellpadding="0" cellspacing="0" width="100%"><tr>
@@ -258,9 +290,9 @@ export const buildDevHtml = (report, devName, startDate, endDate) => {
     <td width="25%" style="padding-right:8px;vertical-align:top;">
       <table cellpadding="0" cellspacing="0" width="100%" style="background:#f8f9fa;border-radius:6px;border:1px solid #e8eaed;">
         <tr><td style="padding:10px 12px;">
-          <div style="font-size:10px;color:#9e9e9e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Review time</div>
-          <div style="font-size:22px;font-weight:700;color:#202124;line-height:1.1;">${fmt(rev.median)}</div>
-          <div style="font-size:10px;color:#9e9e9e;margin-top:11px;">p90 ${fmt(rev.p90)} · avg ${fmt(rev.average)}</div>
+          <div style="font-size:10px;color:#9e9e9e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Pickup time</div>
+          <div style="font-size:22px;font-weight:700;color:#202124;line-height:1.1;">${fmt(rev.pickupTime.median)}</div>
+          <div style="font-size:10px;color:#9e9e9e;margin-top:11px;">p90 ${fmt(rev.pickupTime.p90)} · avg ${fmt(rev.pickupTime.average)}</div>
         </td></tr>
       </table>
     </td>
@@ -278,38 +310,11 @@ export const buildDevHtml = (report, devName, startDate, endDate) => {
     </td>
   </tr></table>`;
 
-  const taskRows = tasks.map((t) => {
-    const s = sc(t.status);
-    const url = `https://everymatrix.atlassian.net/browse/${t.key}`;
-    return `<tr>
-      <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;white-space:nowrap;">
-        <a href="${url}" style="font-size:11px;color:#1a73e8;text-decoration:none;font-family:monospace;">${t.key}</a>
-      </td>
-      <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;font-size:12px;color:#202124;">${t.summary}</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;text-align:center;">${t.estimate}h</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;text-align:center;">${parseFloat(t.actual).toFixed(1)}h</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;text-align:center;">${t.deviation.toFixed(0)}%</td>
-      <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;text-align:center;">
-        <span style="background:${s.bg};color:${s.fg};padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600;">${s.label}</span>
-      </td>
-    </tr>`;
-  }).join('');
-
   const devCard = `
   <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:14px;border:1px solid #e8eaed;border-radius:8px;overflow:hidden;">
     <tr><td style="padding:12px 16px;border-bottom:1px solid #e8eaed;">${cards4}</td></tr>
     <tr style="background:#f8f9fa;"><td style="padding:0;">
-      <table cellpadding="0" cellspacing="0" width="100%">
-        <tr>
-          <th style="padding:7px 10px;font-size:10px;color:#9e9e9e;text-align:left;">Key</th>
-          <th style="padding:7px 10px;font-size:10px;color:#9e9e9e;text-align:left;">Task</th>
-          <th style="padding:7px 10px;font-size:10px;color:#9e9e9e;text-align:center;">Est.</th>
-          <th style="padding:7px 10px;font-size:10px;color:#9e9e9e;text-align:center;">Actual</th>
-          <th style="padding:7px 10px;font-size:10px;color:#9e9e9e;text-align:center;">Dev.</th>
-          <th style="padding:7px 10px;font-size:10px;color:#9e9e9e;text-align:center;">Status</th>
-        </tr>
-        ${taskRows}
-      </table>
+      ${buildTaskTables(taskDetails)}
     </td></tr>
   </table>`;
 

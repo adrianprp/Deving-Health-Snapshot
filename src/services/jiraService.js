@@ -65,7 +65,7 @@ export class JiraService {
       const body = {
         jql,
         maxResults: 100,
-        fields: ['summary', 'timeoriginalestimate']
+        fields: ['summary', 'timeoriginalestimate', 'status']
       };
 
       if (nextPageToken) {
@@ -94,19 +94,15 @@ export class JiraService {
       if (!nextPageToken) break;
     }
 
-    return issues.map(issue => ({
-      key: issue.key,
-      summary: issue.fields.summary,
-      estimateHours: (issue.fields.timeoriginalestimate || 0) / 3600
-    }));
+  return issues.map(issue => ({
+    key: issue.key,
+    summary: issue.fields.summary,
+    estimateHours: (issue.fields.timeoriginalestimate || 0) / 3600,
+    status: issue.fields.status.name
+  }));
   }
 
   async fetchActualHours(accountId, issueKey) {
-
-    const now = new Date();
-    const fromDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-    const toDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-
     let startAt = 0;
     let totalSeconds = 0;
 
@@ -121,10 +117,7 @@ export class JiraService {
       for (const wl of data.worklogs || []) {
         // Check only for assignees logs ignore other people. 
         if (wl?.author?.accountId !== accountId) continue;
-
-        const started = new Date(wl.started);
-        if (started < fromDate || started >= toDate) continue;
-
+        
         totalSeconds += wl.timeSpentSeconds || 0;
       }
 
@@ -132,7 +125,7 @@ export class JiraService {
 
       startAt += 100;
     }
-
+    
     return totalSeconds / 3600;
   }
 
@@ -154,6 +147,7 @@ export class JiraService {
             summary: issue.summary,
             estimateHours: issue.estimateHours,
             actualHours,
+            status: issue.status
           };
         })
       )

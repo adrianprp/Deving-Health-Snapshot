@@ -146,11 +146,16 @@ const snapshot = async () => {
     })
   );
 
-  const estimationSnapshot = jiraData.map(dev => ({
-    email: dev.email,
-    name: emailToName(dev.email),
-    ...calculateEstimateAccuracy(dev.tickets)
-  }));
+
+  const estimationSnapshot = jiraData.map(dev => {
+
+    return {
+        email: dev.email,
+        name: emailToName(dev.email),
+        ...calculateEstimateAccuracy(dev.tickets)
+      }
+    } 
+  );
 
   const devs = buildUnifiedDevs({
     reviewers: reviewerSnapshot,
@@ -164,29 +169,29 @@ const snapshot = async () => {
 
   /* ==== EMAILS ====  */
   const fullReport = buildHtml(snapshot, startDate, endDate);
-  console.log(fullReport)
   await new Mailer().sendMail(
-    '',
+    params.sender,
     params.emailList,
     params.ccList,
-    'Products Team Dev Health Snapshot',
+    'Products Team Dev Snapshot',
     fullReport
   );
 
-  
   for (const email of params.users) {
 
     const devName = emailToName(email);
     const html = buildDevHtml(snapshot, devName, startDate, endDate);
     await new Mailer().sendMail(
+      params.sender,
+      `${params.sender},${email}`,
       '',
-      email,
-      '',
-      `Your Dev Health Snapshot`,
+      `Your Dev Snapshot`,
       html
     );
     console.log(`Sent dev report → ${devName}`);
   }
+
+
 };
 
 snapshot();
