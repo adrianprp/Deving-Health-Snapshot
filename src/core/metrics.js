@@ -165,47 +165,30 @@ export const calculateReviewerMetrics = (
 /* ---- JIRA ---- */
 
 export const calculateEstimateAccuracy = (issues) => {
-  const devStats = {};
   const taskDetails = [];
-  
+
+  const DEV_DONE_STATUSES = new Set([
+    'done',
+    'ready for dev',
+    'testing on stage',
+    'test passed on stage',
+    'testing on prod',
+    'prod testing'
+  ]);
 
   issues.forEach(issue => {
-    const dev = issue.developer || 'Unknown';
-
-    if (!devStats[dev]) {
-      devStats[dev] = {
-        total: 0,
-        withEstimate: 0,
-        withoutEstimate: 0,
-        withinKpi: 0,
-        majorMisses: 0,
-        deviations: []
-      };
-    }
-
-    const stat = devStats[dev];
-
     const estimate = issue.estimateHours;
     const actual = issue.actualHours;
-
-    stat.total++;
 
     let deviation = null;
     let estimationStatus = 'NO_ESTIMATE';
 
-    if (!estimate || estimate === 0) {
-      stat.withoutEstimate++;
-    } else {
-      stat.withEstimate++;
-
+    if (estimate && estimate !== 0) {
       deviation = Math.abs(actual - estimate) / estimate;
-      stat.deviations.push(deviation);
 
       if (deviation <= 0.2) {
-        stat.withinKpi++;
         estimationStatus = 'OK';
       } else if (deviation > 0.5) {
-        stat.majorMisses++;
         estimationStatus = 'MAJOR_MISS';
       } else {
         estimationStatus = 'MINOR_MISS';
@@ -219,8 +202,63 @@ export const calculateEstimateAccuracy = (issues) => {
       actual,
       deviation: deviation !== null ? Number((deviation * 100).toFixed(1)) : null,
       estimationStatus,
-      status: issue.status
+      status: issue.status,
+      developer: issue.developer || 'Unknown',
     });
+  });
+
+  const kpiEligibleIssues = taskDetails.filter(issue =>
+    DEV_DONE_STATUSES.has(issue.status.trim().toLowerCase())
+  );
+
+  const inProgressIssues = taskDetails.filter(issue =>
+    !DEV_DONE_STATUSES.has(issue.status.trim().toLowerCase())
+  );
+
+  const devStats = {};
+
+  kpiEligibleIssues.forEach(issue => {
+    const dev = issue.developer;
+
+    if (!devStats[dev]) {
+      devStats[dev] = {
+        total: 0,
+        withEstimate: 0,
+        withoutEstimate: 0,
+        withinKpi: 0,
+        majorMisses: 0,
+        deviations: []
+      };
+    }
+
+    const stat = devStats[dev];
+    stat.total++;
+
+    if (!issue.estimate || issue.estimate === 0) {
+      stat.withoutEstimate++;
+    } else {
+      stat.withEstimate++;
+      const rawDeviation = issue.deviation !== null ? issue.deviation / 100 : 0;
+      stat.deviations.push(rawDeviation);
+
+      if (issue.estimationStatus === 'OK') stat.withinKpi++;
+      if (issue.estimationStatus === 'MAJOR_MISS') stat.majorMisses++;
+    }
+  });
+
+  // register devs that only appear in inProgress
+  inProgressIssues.forEach(issue => {
+    const dev = issue.developer;
+    if (!devStats[dev]) {
+      devStats[dev] = {
+        total: 0,
+        withEstimate: 0,
+        withoutEstimate: 0,
+        withinKpi: 0,
+        majorMisses: 0,
+        deviations: []
+      };
+    }
   });
 
   const devMetrics = Object.entries(devStats).map(([dev, s]) => {
@@ -228,19 +266,11 @@ export const calculateEstimateAccuracy = (issues) => {
       ? (s.withinKpi / s.withEstimate) * 100
       : 0;
 
-  const deviations = s.deviations;
+    const deviations = s.deviations;
 
-  const avgDev = deviations.length
-    ? average(deviations) * 100
-    : 0;
-
-  const medianDev = deviations.length
-    ? median(deviations) * 100
-    : 0;
-
-  const p90Dev = deviations.length
-    ? p90(deviations) * 100
-    : 0;
+    const avgDev = deviations.length ? average(deviations) * 100 : 0;
+    const medianDev = deviations.length ? median(deviations) * 100 : 0;
+    const p90Dev = deviations.length ? p90(deviations) * 100 : 0;
 
     return {
       developer: dev,
@@ -256,23 +286,6 @@ export const calculateEstimateAccuracy = (issues) => {
       }
     };
   });
-
-  const DEV_DONE_STATUSES = new Set([
-    'done',
-    'ready for dev',
-    'testing on stage',
-    'test passed on stage',
-    'testing on prod',
-    'prod testing'
-  ]);
-
-  const kpiEligibleIssues = taskDetails.filter(issue =>
-    DEV_DONE_STATUSES.has(issue.status.trim().toLowerCase())
-  );
-
-  const inProgressIssues = taskDetails.filter(issue =>
-    !DEV_DONE_STATUSES.has(issue.status.trim().toLowerCase())
-  );
 
   return {
     devMetrics,
