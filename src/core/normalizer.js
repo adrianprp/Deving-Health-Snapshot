@@ -17,6 +17,7 @@ export const normalizeMergeRequests = (rawMrs) => {
         mr.draft ??
         mr.title?.toLowerCase().includes("draft"),
       url: mr.web_url,
-      notes: mr.notes || []
+      notes: mr.notes || [],
+      changesCount: Number(mr.changes_count),
     }));
 };

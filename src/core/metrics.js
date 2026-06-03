@@ -1,6 +1,5 @@
 import { isValidReviewerFeedback } from "../utils/utils.js";
 import { calcTimeDifference, formatTime } from "../utils/timeUtils.js";
-import { params, USERS } from "../config/env.js";
 
 /* ---- UTILS ---- */
 
@@ -85,80 +84,75 @@ export const calculateWaitingForReview = (mrs) => {
 
 export const calculateReviewerMetrics = (
   mergeRequests,
-  devScopes
+  reviewerName
 ) => {
 
-  const responseData = {};
+  const pickupTimes = [];
+  const suspiciousReviews = [];
 
-  USERS.forEach(reviewer => {
+  mergeRequests.forEach(mr => {
+    const reviewerNotes = mr.notes
+      .filter(note =>
+        isValidReviewerFeedback(note, mr.author.name) &&
+        note.author.name === reviewerName
+      )
+      .sort((a, b) =>
+        new Date(a.created_at) - new Date(b.created_at)
+      );
 
-    const reviewerRepos = devScopes[reviewer] || [];
-
-    const scopedMrs = mergeRequests.filter(
-      mr =>
-        reviewerRepos.includes(mr.projectId) &&
-        mr.author.name !== reviewer
-    );
-
-    const times = [];
-
-    scopedMrs.forEach(mr => {
-
-      const reviewerNotes = mr.notes
-        .filter(note =>
-          isValidReviewerFeedback(note, mr.author.name) &&
-          note.author.name === reviewer
-        )
-        .sort((a, b) =>
-          new Date(a.created_at) -
-          new Date(b.created_at)
-        );
-
-      if (reviewerNotes.length) {
-
-        const pickupTime = calcTimeDifference(
+    if (reviewerNotes.length) {
+      pickupTimes.push(
+        calcTimeDifference(
           mr.createdAt,
           reviewerNotes[0].created_at,
-          reviewer
-        );
+          reviewerName
+        )
+      );
+    }
 
-        times.push(pickupTime);
 
-      } else {
-        times.push(null);
-      }
+    const approvals = reviewerNotes.filter(note =>
+      note.body.includes('approved this merge request')
+    ).length;
 
-    });
+    const reviewComments = reviewerNotes.filter(note =>
+      !note.system &&
+      !note.body.includes('approved this merge request') &&
+      !note.body.includes('unapproved this merge request')
+    ).length;
 
-    const validTimes = times.filter(t => t != null);
-
-    responseData[reviewer] = {
-      repos: reviewerRepos,
-      total: scopedMrs.length,
-      interacted: validTimes.length,
-      participationRate:
-        scopedMrs.length
-          ? validTimes.length / scopedMrs.length
-          : 0,
-      pickupTime: {
-        median:
-          validTimes.length
-            ? formatTime(median(validTimes))
-            : null,
-        p90:
-          validTimes.length
-            ? formatTime(p90(validTimes))
-            : null,
-        average:
-          validTimes.length
-            ? formatTime(average(validTimes))
-            : null,
-      }    
-    };
+    if (
+      mr.changesCount >= 12 &&
+      approvals > 0 &&
+      reviewComments === 0
+    ) {
+      suspiciousReviews.push({
+        title: mr.title,
+        url: mr.url,
+        changesCount: mr.changesCount,
+        reason: 'Large file-count MR approved without review comments'
+      });
+    }
 
   });
+  const validTimes = pickupTimes.filter(Boolean);
 
-  return responseData;
+  return {
+    reviewedMrs: mergeRequests.length,
+    suspiciousReviewCount: suspiciousReviews.length,
+    suspiciousReviews,
+    pickupTime: {
+      median: validTimes.length
+        ? formatTime(median(validTimes))
+        : null,
+      p90: validTimes.length
+        ? formatTime(p90(validTimes))
+        : null,
+      average: validTimes.length
+        ? formatTime(average(validTimes))
+        : null
+    }
+  };
 };
 
 
@@ -170,8 +164,11 @@ export const calculateEstimateAccuracy = (issues) => {
   const DEV_DONE_STATUSES = new Set([
     'done',
     'ready for dev',
+    'ready for deployment',
     'testing on stage',
+    'on stage',
     'test passed on stage',
+    'testing on prod',
     'testing on prod',
     'prod testing'
   ]);

@@ -19,37 +19,6 @@ export const groupByRepo = (mrs) => {
   }, {});
 };
 
-export const buildDevScopes = (mrs) => {
-  const scopes = {};
-
-  const addDev = (dev) => {
-    if (!scopes[dev]) {
-      scopes[dev] = new Set();
-    }
-  };
-
-  mrs.forEach(mr => {
-    const { projectId, author, reviewers } = mr;
-
-    // author contributes
-    const authorName = author.name;
-    addDev(authorName);
-    scopes[authorName].add(projectId);
-
-    // reviewers contribute
-    reviewers.forEach(dev => {
-      addDev(dev);
-      scopes[dev].add(projectId);
-    });
-  });
-
-  Object.keys(scopes).forEach(dev => {
-    scopes[dev] = Array.from(scopes[dev]);
-  });
-
-  return scopes;
-};
-
 export const emailToName = (email) => {
   if (!email) return null;
 
@@ -135,4 +104,29 @@ export const buildStorage = ({
   });
 
   return storageSnapshot;
+};
+
+export const extractReviewedMrs = (
+  reviewEvents
+) => {
+
+  const uniqueMrs = new Map();
+
+  reviewEvents.forEach(event => {
+
+    const key =
+      `${event.project_id}-${event.note.noteable_iid}`;
+
+    if (!uniqueMrs.has(key)) {
+
+      uniqueMrs.set(key, {
+        projectId: event.project_id,
+        mrIid: event.note.noteable_iid
+      });
+
+    }
+
+  });
+
+  return [...uniqueMrs.values()];
 };

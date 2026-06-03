@@ -57,18 +57,4 @@ export const buildFlowSnapshot = ({
 };
 
 
-export const buildReviewersSnapshot = ({
-  mrs,
-  devScopes
-}) => {
 
-  const reviewerMetrics =
-    metrics.calculateReviewerMetrics(
-      mrs,
-      devScopes
-    );
-
-  return {
-    reviewerMetrics
-  }
-};

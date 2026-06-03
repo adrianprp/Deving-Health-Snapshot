@@ -15,11 +15,11 @@ import { GitLabService } from './services/gitlabService.js';
 import { JiraService } from './services/jiraService.js';
 import { normalizeMergeRequests } from './core/normalizer.js';
 import { enrichMergeRequests } from './core/enrich.js';
-import { calculateEstimateAccuracy } from './core/metrics.js';
+import { calculateEstimateAccuracy, calculateReviewerMetrics } from './core/metrics.js';
 
-import { buildFlowSnapshot, buildReviewersSnapshot } from './core/snapshotBuilder.js';
+import { buildFlowSnapshot } from './core/snapshotBuilder.js';
 
-import { groupByRepo, buildDevScopes, emailToName, buildUnifiedDevs } from './utils/utils.js';
+import { groupByRepo, emailToName, buildUnifiedDevs } from './utils/utils.js';
 import { buildHtml, buildDevHtml } from './utils/htmlBuilder.js';
 import { Mailer } from './services/mailService.js';
 
@@ -80,15 +80,9 @@ const snapshot = async () => {
 
   /* FLOW METRICS */
 
-  const watchedRepoIds = params.gitlab.flowIds.map(Number);
+  const groupedByRepo = groupByRepo(enriched);
 
-  const watchedMrs = enriched.filter(mr =>
-    watchedRepoIds.includes(mr.projectId)
-  );
-
-  const groupedByRepo = groupByRepo(watchedMrs);
-
-  params.gitlab.flowIds.forEach( async (id) => {
+  params.gitlab.projectIds.forEach( async (id) => {
     const project =  await gitlab.getProject(id);
     const projectName = project.name;
     const projectUrl = project.http_url_to_repo;
@@ -111,16 +105,63 @@ const snapshot = async () => {
 
   /* REVIEWERS */
 
-  const devScopes = buildDevScopes(enriched);
+  const reviewerSnapshot = {};
 
-  const weeklyPeriod = enriched.filter(mr =>
-    dayjs(mr.createdAt).isBetween(startDate, endDate, null, "[]")
-  );
+  for (const email of params.users) {
 
-  const reviewerSnapshot = buildReviewersSnapshot({
-    mrs: weeklyPeriod,
-    devScopes
-  }).reviewerMetrics;
+    const user = await gitlab.getUser(emailToName(email));
+
+    const events = await gitlab.getUserEvents(
+      user.id,
+      startDate.subtract(1, 'day'),
+      endDate.add(1, 'day')
+    );
+
+    const reviewEvents = events.filter(event =>
+      ( event.action_name === 'commented on' && event.note?.noteable_type === 'MergeRequest') ||
+      ( event.action_name === 'accepted' && event.target_type === 'MergeRequest') || 
+      ( event.action_name === 'approved' && event.target_type === 'MergeRequest'));
+
+    const extractReviewedMrs = reviewEvents => {
+
+      const uniqueMrs = new Map();
+
+      reviewEvents.forEach(event => {
+
+        const mrIid = event.note?.noteable_iid ?? event.target_iid;
+
+        const key = `${event.project_id}-${mrIid}`;
+
+        uniqueMrs.set(key, {
+          projectId: event.project_id,
+          mrIid
+        });
+      });
+
+      return [...uniqueMrs.values()];
+    };
+    const reviewedMrs = extractReviewedMrs(reviewEvents);
+
+    const rawMrs = await Promise.all(
+      reviewedMrs.map(mr =>
+        gitlab.getMergeRequest(
+          mr.projectId,
+          mr.mrIid
+        )
+      )
+    );
+    const normalized =
+    normalizeMergeRequests(rawMrs);
+    
+    const enriched =
+    enrichMergeRequests(normalized);
+
+    reviewerSnapshot[emailToName(email)] =
+      calculateReviewerMetrics(
+        enriched,
+        emailToName(email)
+      );
+  }
 
   /* ==== JIRA ====  */
 
@@ -169,6 +210,7 @@ const snapshot = async () => {
 
   /* ==== EMAILS ====  */
   const fullReport = buildHtml(snapshot, startDate, endDate);
+
   await new Mailer().sendMail(
     params.sender,
     params.emailList,
@@ -181,6 +223,7 @@ const snapshot = async () => {
 
     const devName = emailToName(email);
     const html = buildDevHtml(snapshot, devName, startDate, endDate);
+
     await new Mailer().sendMail(
       params.sender,
       `${params.sender},${email}`,

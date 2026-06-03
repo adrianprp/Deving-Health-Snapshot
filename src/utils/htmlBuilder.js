@@ -35,12 +35,6 @@ const kpiStyle = (k) => {
   return { color:'#b31412', bg:'#fce8e6' };
 };
 
-const partStyle = (r) => {
-  if (r >= 0.4) return { color:'#1a6e2e', bg:'#e6f4ea' };
-  if (r >= 0.2) return { color:'#8a5000', bg:'#fef7e0' };
-  return { color:'#b31412', bg:'#fce8e6' };
-};
-
 const bar = (pct, color) => {
   const w = Math.min(100, Math.round(pct));
   const r = 100 - w;
@@ -92,9 +86,11 @@ const buildTaskRow = (t) => {
   </tr>`;
 };
 
-const buildTaskTables = (taskDetails) => {
+const buildTaskTables = (taskDetails, suspiciousReviews = [] ) => {
   const kpiIssues = taskDetails?.kpiEligibleIssues || [];
   const inProgressIssues = taskDetails?.inProgressIssues || [];
+  const suspiciousSection = buildSuspiciousReviewRows(suspiciousReviews);
+  
 
   const kpiSection = kpiIssues.length > 0 ? `
     <tr><td colspan="7" style="padding:6px 10px 4px;background:#f0f4ff;border-bottom:1px solid #e8eaed;">
@@ -118,7 +114,59 @@ const buildTaskTables = (taskDetails) => {
     ${TABLE_HEADER}
     ${kpiSection}
     ${inProgressSection}
+    ${suspiciousSection}
   </table>`;
+};
+
+const buildSuspiciousReviewRows = (reviews = []) => {
+  if (!reviews.length) return '';
+
+  return `
+    <tr>
+      <td colspan="7" style="height:16px;background:#ffffff;"></td>
+    </tr>
+
+    <tr>
+      <td colspan="7"
+          style="
+            padding:6px 10px 4px;
+            background:#fce8e6;
+            border-bottom:1px solid #e8eaed;
+            border-top:2px solid #e8eaed;
+          ">
+        <span
+          style="
+            font-size:10px;
+            font-weight:700;
+            color:#b31412;
+            text-transform:uppercase;
+            letter-spacing:0.6px;
+          ">
+          ⚠ Suspicious Reviews
+        </span>
+      </td>
+    </tr>
+
+    ${reviews.map(r => `
+      <tr>
+        <td colspan="7"
+            style="
+              padding:8px 10px;
+              border-bottom:1px solid #f1f3f4;
+            ">
+          <a href="${r.url}"
+             style="
+               color:#1a73e8;
+               text-decoration:none;
+               font-size:12px;
+               font-family:monospace;
+             ">
+            MR #${r.url.split('/').pop()}
+          </a>
+        </td>
+      </tr>
+    `).join('')}
+  `;
 };
 
 export const buildHtml = (report, startDate, endDate) => {
@@ -163,9 +211,9 @@ export const buildHtml = (report, startDate, endDate) => {
     const m = est.devMetrics[0] || {};
     const kpi = m.kpi || 0;
     const ks = kpiStyle(kpi);
-    const ps = partStyle(rev.participationRate || 0);
-    const partPct = Math.round((rev.participationRate || 0) * 100);
     const taskDetails = est.taskDetails || [];
+    const suspiciousCount = rev.suspiciousReviewCount || 0;
+
 
     const cards4 = `
     <table cellpadding="0" cellspacing="0" width="100%"><tr>
@@ -174,8 +222,16 @@ export const buildHtml = (report, startDate, endDate) => {
           `${m.total || 0} tasks · ${m.majorMisses || 0} major miss${(m.majorMisses || 0) !== 1 ? 'es' : ''}`)}
       </td>
       <td width="25%" style="padding-right:8px;vertical-align:top;">
-        ${scorecard('Review participation', partPct + '%', ps.color, partPct, ps.color,
-          `${rev.interacted} of ${rev.total} MRs`)}
+        ${scorecard(
+          'Reviews',
+          rev.reviewedMrs || 0,
+          suspiciousCount === 0 ? '#1a6e2e' : '#8a5000',
+          null,
+          null,
+          suspiciousCount === 0
+            ? 'No suspicious reviews'
+            : `${suspiciousCount} suspicious review${suspiciousCount > 1 ? 's' : ''}`
+        )}
       </td>
       <td width="25%" style="padding-right:8px;vertical-align:top;">
         <table cellpadding="0" cellspacing="0" width="100%" style="background:#f8f9fa;border-radius:6px;border:1px solid #e8eaed;">
@@ -203,7 +259,10 @@ export const buildHtml = (report, startDate, endDate) => {
       </td></tr>
       <tr><td style="padding:12px 16px;border-bottom:1px solid #e8eaed;">${cards4}</td></tr>
       <tr style="background:#f8f9fa;"><td style="padding:0;">
-        ${buildTaskTables(taskDetails)}
+        ${buildTaskTables(
+          taskDetails,
+          rev.suspiciousReviews || []
+        )}
       </td></tr>
     </table>`;
   }).join('');
@@ -261,9 +320,8 @@ export const buildDevHtml = (report, devName, startDate, endDate) => {
   const kpi = m.kpi || 0;
 
   const ks = kpiStyle(kpi);
-  const ps = partStyle(rev.participationRate || 0);
-  const partPct = Math.round((rev.participationRate || 0) * 100);
   const taskDetails = est.taskDetails || [];
+  const suspiciousCount = rev.suspiciousReviewCount || 0;
 
   const cards4 = `
   <table cellpadding="0" cellspacing="0" width="100%"><tr>
@@ -279,12 +337,14 @@ export const buildDevHtml = (report, devName, startDate, endDate) => {
     </td>
     <td width="25%" style="padding-right:8px;vertical-align:top;">
       ${scorecard(
-        'Review participation',
-        partPct + '%',
-        ps.color,
-        partPct,
-        ps.color,
-        `${rev.interacted} of ${rev.total} MRs`
+        'Reviews',
+        rev.reviewedMrs || 0,
+        suspiciousCount === 0 ? '#1a6e2e' : '#8a5000',
+        null,
+        null,
+        suspiciousCount === 0
+          ? 'No suspicious reviews'
+          : `${suspiciousCount} suspicious review${suspiciousCount > 1 ? 's' : ''}`
       )}
     </td>
     <td width="25%" style="padding-right:8px;vertical-align:top;">
@@ -314,7 +374,10 @@ export const buildDevHtml = (report, devName, startDate, endDate) => {
   <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:14px;border:1px solid #e8eaed;border-radius:8px;overflow:hidden;">
     <tr><td style="padding:12px 16px;border-bottom:1px solid #e8eaed;">${cards4}</td></tr>
     <tr style="background:#f8f9fa;"><td style="padding:0;">
-      ${buildTaskTables(taskDetails)}
+      ${buildTaskTables(
+        taskDetails,
+        rev.suspiciousReviews || []
+      )}
     </td></tr>
   </table>`;
 

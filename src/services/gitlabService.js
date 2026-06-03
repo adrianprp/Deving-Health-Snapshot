@@ -92,4 +92,48 @@ export class GitLabService {
 		const res = await this.safeFetch(url);
 		return res.json();
 	}
+
+	async getUserEvents(userId, after, before) {
+
+		const url =
+			`${this.url}api/v4/users/${userId}/events` +
+			`?after=${after.toISOString()}` +
+			`&before=${before.toISOString()}` +
+			`&per_page=100`;
+
+		return this.getPaginated(url);
+	}
+
+	async getMergeRequest(projectId, mergeReqId) {
+
+		const url =
+			`${this.url}api/v4/projects/${projectId}` +
+			`/merge_requests/${mergeReqId}`;
+
+		const res = await this.safeFetch(url);
+
+		const mr = await res.json();
+
+		const notes = await this.getNotes(
+			projectId,
+			mergeReqId
+		);
+
+		return {
+			...mr,
+			notes
+		};
+	}
+
+	async getUser(search) {
+
+		const url =
+			`${this.url}api/v4/users` +
+			`?search=${encodeURIComponent(search)}`;
+
+		const users =
+			await this.getPaginated(url);
+
+		return users[0] ?? null;
+	}
 }
