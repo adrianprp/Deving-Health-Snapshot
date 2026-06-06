@@ -14,8 +14,8 @@ import { params } from './config/env.js';
 import { GitLabService } from './services/gitlabService.js';
 import { JiraService } from './services/jiraService.js';
 import { normalizeMergeRequests } from './core/normalizer.js';
-import { enrichMergeRequests } from './core/enrich.js';
-import { calculateEstimateAccuracy, calculateReviewerMetrics } from './core/metrics.js';
+import { enrichMergeRequests, enrichTickets } from './core/enrich.js';
+import { calculateEstimateAccuracy, calculateReviewerMetrics, calculateReopenMetrics } from './core/metrics.js';
 
 import { buildFlowSnapshot } from './core/snapshotBuilder.js';
 
@@ -174,29 +174,19 @@ const snapshot = async () => {
   const jiraData = await Promise.all(
     params.users.map(async (email) => {
       const accountId = await jira.getAccountId(email);
-      const tickets = await jira.getDevStats(
-        accountId,
-        params.jira.projectKey
-      );
+      const tickets = await jira.getDeveloperTickets(accountId, params.jira.projectKey);
+      const enrichedTickets = await enrichTickets(tickets);
 
-      return {
-        email,
-        accountId,
-        tickets
-      };
+      return { email, accountId, enrichedTickets };
     })
   );
 
-
-  const estimationSnapshot = jiraData.map(dev => {
-
-    return {
-        email: dev.email,
-        name: emailToName(dev.email),
-        ...calculateEstimateAccuracy(dev.tickets)
-      }
-    } 
-  );
+  const estimationSnapshot = jiraData.map(dev => ({
+    email: dev.email,
+    name: emailToName(dev.email),
+    ...calculateEstimateAccuracy(dev.enrichedTickets),
+    ...calculateReopenMetrics(dev.enrichedTickets)
+  }));
 
   const devs = buildUnifiedDevs({
     reviewers: reviewerSnapshot,

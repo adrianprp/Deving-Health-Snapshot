@@ -157,138 +157,100 @@ export const calculateReviewerMetrics = (
 
 
 /* ---- JIRA ---- */
+const DEV_DONE_STATUSES = new Set([
+  'done', 'ready for dev', 'ready for deployment',
+  'testing on stage', 'on stage', 'test passed on stage',
+  'testing on prod', 'prod testing'
+]);
+
+const REOPEN_ELIGIBLE_STATUSES = new Set([
+  'done', 'testing on stage', 'on stage',
+  'test passed on stage', 'testing on prod', 'prod testing'
+]);
+
+const statusKey = (status) => (status ?? 'unknown').trim().toLowerCase();
 
 export const calculateEstimateAccuracy = (issues) => {
-  const taskDetails = [];
+  const taskDetails = issues.map(issue => {
+    const { estimateHours: estimate, actualHours: actual } = issue;
 
-  const DEV_DONE_STATUSES = new Set([
-    'done',
-    'ready for dev',
-    'ready for deployment',
-    'testing on stage',
-    'on stage',
-    'test passed on stage',
-    'testing on prod',
-    'testing on prod',
-    'prod testing'
-  ]);
-
-  issues.forEach(issue => {
-    const estimate = issue.estimateHours;
-    const actual = issue.actualHours;
-
-    let deviation = null;
+    let deviation        = null;
     let estimationStatus = 'NO_ESTIMATE';
 
-    if (estimate && estimate !== 0) {
+    if (estimate) {
       deviation = Math.abs(actual - estimate) / estimate;
-
-      if (deviation <= 0.2) {
-        estimationStatus = 'OK';
-      } else if (deviation > 0.5) {
-        estimationStatus = 'MAJOR_MISS';
-      } else {
-        estimationStatus = 'MINOR_MISS';
-      }
+      estimationStatus = deviation <= 0.2 ? 'OK'
+                       : deviation >  0.5 ? 'MAJOR_MISS'
+                       :                    'MINOR_MISS';
     }
-
-    taskDetails.push({
-      key: issue.key,
-      summary: issue.summary,
-      estimate,
-      actual,
-      deviation: deviation !== null ? Number((deviation * 100).toFixed(1)) : null,
-      estimationStatus,
-      status: issue.status,
-      developer: issue.developer || 'Unknown',
-    });
-  });
-
-  const kpiEligibleIssues = taskDetails.filter(issue =>
-    DEV_DONE_STATUSES.has(issue.status.trim().toLowerCase())
-  );
-
-  const inProgressIssues = taskDetails.filter(issue =>
-    !DEV_DONE_STATUSES.has(issue.status.trim().toLowerCase())
-  );
-
-  const devStats = {};
-
-  kpiEligibleIssues.forEach(issue => {
-    const dev = issue.developer;
-
-    if (!devStats[dev]) {
-      devStats[dev] = {
-        total: 0,
-        withEstimate: 0,
-        withoutEstimate: 0,
-        withinKpi: 0,
-        majorMisses: 0,
-        deviations: []
-      };
-    }
-
-    const stat = devStats[dev];
-    stat.total++;
-
-    if (!issue.estimate || issue.estimate === 0) {
-      stat.withoutEstimate++;
-    } else {
-      stat.withEstimate++;
-      const rawDeviation = issue.deviation !== null ? issue.deviation / 100 : 0;
-      stat.deviations.push(rawDeviation);
-
-      if (issue.estimationStatus === 'OK') stat.withinKpi++;
-      if (issue.estimationStatus === 'MAJOR_MISS') stat.majorMisses++;
-    }
-  });
-
-  // register devs that only appear in inProgress
-  inProgressIssues.forEach(issue => {
-    const dev = issue.developer;
-    if (!devStats[dev]) {
-      devStats[dev] = {
-        total: 0,
-        withEstimate: 0,
-        withoutEstimate: 0,
-        withinKpi: 0,
-        majorMisses: 0,
-        deviations: []
-      };
-    }
-  });
-
-  const devMetrics = Object.entries(devStats).map(([dev, s]) => {
-    const kpi = s.withEstimate
-      ? (s.withinKpi / s.withEstimate) * 100
-      : 0;
-
-    const deviations = s.deviations;
-
-    const avgDev = deviations.length ? average(deviations) * 100 : 0;
-    const medianDev = deviations.length ? median(deviations) * 100 : 0;
-    const p90Dev = deviations.length ? p90(deviations) * 100 : 0;
 
     return {
-      developer: dev,
-      kpi: Number(kpi.toFixed(1)),
-      total: s.total,
-      withEstimate: s.withEstimate,
-      withoutEstimate: s.withoutEstimate,
-      majorMisses: s.majorMisses,
+      key:             issue.key,
+      summary:         issue.summary,
+      estimate,
+      actual,
+      deviation:       deviation !== null ? Number((deviation * 100).toFixed(1)) : null,
+      estimationStatus,
+      status:          issue.status ?? 'Unknown',
+      developer:       issue.developer || 'Unknown'
+    };
+  });
+
+  const kpiEligibleIssues = taskDetails.filter(issues => DEV_DONE_STATUSES.has(statusKey(issues.status)));
+  const inProgressIssues  = taskDetails.filter(issues => !DEV_DONE_STATUSES.has(statusKey(issues.status)));
+
+  const devStats = {};
+  const registerDev = (dev) => {
+    devStats[dev] ??= { total: 0, withEstimate: 0, withoutEstimate: 0, withinKpi: 0, majorMisses: 0, deviations: [] };
+  };
+
+  for (const issue of kpiEligibleIssues) {
+    const { developer: dev, estimate, deviation, estimationStatus } = issue;
+    registerDev(dev);
+    const stats = devStats[dev];
+    stats.total++;
+
+    if (!estimate) {
+      stats.withoutEstimate++;
+    } else {
+      stats.withEstimate++;
+      stats.deviations.push(deviation !== null ? deviation / 100 : 0);
+      if (estimationStatus === 'OK')         stats.withinKpi++;
+      if (estimationStatus === 'MAJOR_MISS') stats.majorMisses++;
+    }
+  }
+
+  for (const issue of inProgressIssues) registerDev(issue.developer);
+
+  const devMetrics = Object.entries(devStats).map(([dev, stats]) => {
+    const kpi  = stats.withEstimate ? (stats.withinKpi / stats.withEstimate) * 100 : 0;
+    const devs = stats.deviations;
+    return {
+      developer:      dev,
+      kpi:            Number(kpi.toFixed(1)),
+      totalEligible:          stats.total,
+      withEstimate:   stats.withEstimate,
+      withoutEstimate:stats.withoutEstimate,
+      majorMisses:    stats.majorMisses,
       deviation: {
-        medianDev: Number(medianDev.toFixed(1)),
-        p90Dev: Number(p90Dev.toFixed(1)),
-        avgDev: Number(avgDev.toFixed(1))
+        medianDev: Number((devs.length ? median(devs)   * 100 : 0).toFixed(1)),
+        p90Dev:    Number((devs.length ? p90(devs)      * 100 : 0).toFixed(1)),
+        avgDev:    Number((devs.length ? average(devs)  * 100 : 0).toFixed(1))
       }
     };
   });
 
+  return { devMetrics, taskDetails: { kpiEligibleIssues, inProgressIssues } };
+};
+
+export const calculateReopenMetrics = (issues) => {
+  const eligible = issues.filter(i => REOPEN_ELIGIBLE_STATUSES.has(statusKey(i.status)));
+  const reopened = eligible.filter(i => i.wasReopened).map(({ key, summary }) => ({ key, summary }));
+
   return {
-    devMetrics,
-    taskDetails: {
-      kpiEligibleIssues,
-      inProgressIssues
-    }
+    reopenRate:     eligible.length ? Number((reopened.length / eligible.length * 100).toFixed(1)) : 0,
+    totalReopened:  reopened.length,
+    totalIssuesEligible:    eligible.length,
+    reopenedIssues: reopened
   };
 };

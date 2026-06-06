@@ -35,6 +35,12 @@ const kpiStyle = (k) => {
   return { color:'#b31412', bg:'#fce8e6' };
 };
 
+const reopenStyle = (rate) => {
+  if (rate <= 5) return { color:'#1a6e2e', bg:'#e6f4ea' };
+  if (rate <= 10) return { color:'#8a5000', bg:'#fef7e0' };
+  return { color:'#b31412', bg:'#fce8e6' };
+};
+
 const bar = (pct, color) => {
   const w = Math.min(100, Math.round(pct));
   const r = 100 - w;
@@ -86,11 +92,43 @@ const buildTaskRow = (t) => {
   </tr>`;
 };
 
-const buildTaskTables = (taskDetails, suspiciousReviews = [] ) => {
+const buildReopenedRows = (reopenedIssues = []) => {
+  if (!reopenedIssues.length) return '';
+
+  return `
+    <tr>
+      <td colspan="7" style="height:16px;background:#ffffff;"></td>
+    </tr>
+    <tr>
+      <td colspan="7"
+          style="
+            padding:6px 10px 4px;
+            background:#fef7e0;
+            border-bottom:1px solid #e8eaed;
+            border-top:2px solid #e8eaed;
+          ">
+        <span style="font-size:10px;font-weight:700;color:#8a5000;text-transform:uppercase;letter-spacing:0.6px;">
+          ↩ Presumed Reopened Issues
+        </span>
+      </td>
+    </tr>
+    ${reopenedIssues.map(t => {
+      const url = `https://everymatrix.atlassian.net/browse/${t.key}`;
+      return `<tr>
+        <td style="padding:7px 10px;border-bottom:1px solid #f1f3f4;white-space:nowrap;">
+          <a href="${url}" style="font-size:11px;color:#1a73e8;text-decoration:none;font-family:monospace;">${t.key}</a>
+        </td>
+        <td colspan="5" style="padding:7px 10px;border-bottom:1px solid #f1f3f4;font-size:12px;color:#202124;">${t.summary}</td>
+      </tr>`;
+    }).join('')}
+  `;
+};
+
+const buildTaskTables = (taskDetails, suspiciousReviews = [], reopenedIssues = []) => {
   const kpiIssues = taskDetails?.kpiEligibleIssues || [];
   const inProgressIssues = taskDetails?.inProgressIssues || [];
   const suspiciousSection = buildSuspiciousReviewRows(suspiciousReviews);
-  
+  const reopenedSection = buildReopenedRows(reopenedIssues);
 
   const kpiSection = kpiIssues.length > 0 ? `
     <tr><td colspan="7" style="padding:6px 10px 4px;background:#f0f4ff;border-bottom:1px solid #e8eaed;">
@@ -111,10 +149,11 @@ const buildTaskTables = (taskDetails, suspiciousReviews = [] ) => {
   ` : '';
 
   return `<table cellpadding="0" cellspacing="0" width="100%">
-    ${TABLE_HEADER}
-    ${kpiSection}
-    ${inProgressSection}
-    ${suspiciousSection}
+  ${TABLE_HEADER}
+  ${kpiSection}
+  ${inProgressSection}
+  ${reopenedSection}
+  ${suspiciousSection}
   </table>`;
 };
 
@@ -169,6 +208,59 @@ const buildSuspiciousReviewRows = (reviews = []) => {
   `;
 };
 
+const buildCards5 = (rev, m, kpi, ks, reopenRate, totalReopened, totalIssues) => {
+  const suspiciousCount = rev.suspiciousReviewCount || 0;
+  const rs = reopenStyle(reopenRate);
+
+  return `
+  <table cellpadding="0" cellspacing="0" width="100%"><tr>
+    <td width="20%" style="padding-right:8px;vertical-align:top;">
+      ${scorecard('Estimation KPI', kpi + '%', ks.color, kpi, ks.color,
+        `${m.total || 0} tasks · ${m.majorMisses || 0} major miss${(m.majorMisses || 0) !== 1 ? 'es' : ''}`)}
+    </td>
+    <td width="20%" style="padding-right:8px;vertical-align:top;">
+      ${scorecard(
+        'Reviews',
+        rev.reviewedMrs || 0,
+        suspiciousCount === 0 ? '#1a6e2e' : '#8a5000',
+        null,
+        null,
+        suspiciousCount === 0
+          ? 'No suspicious reviews'
+          : `${suspiciousCount} suspicious review${suspiciousCount > 1 ? 's' : ''}`
+      )}
+    </td>
+    <td width="20%" style="padding-right:8px;vertical-align:top;">
+      <table cellpadding="0" cellspacing="0" width="100%" style="background:#f8f9fa;border-radius:6px;border:1px solid #e8eaed;">
+        <tr><td style="padding:10px 12px;">
+          <div style="font-size:10px;color:#9e9e9e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Pickup time</div>
+          <div style="font-size:22px;font-weight:700;color:#202124;line-height:1.1;">${fmt(rev.pickupTime.median)}</div>
+          <div style="font-size:10px;color:#9e9e9e;margin-top:11px;">p90 ${fmt(rev.pickupTime.p90)} · avg ${fmt(rev.pickupTime.average)}</div>
+        </td></tr>
+      </table>
+    </td>
+    <td width="20%" style="padding-right:8px;vertical-align:top;">
+      <table cellpadding="0" cellspacing="0" width="100%" style="background:#f8f9fa;border-radius:6px;border:1px solid #e8eaed;">
+        <tr><td style="padding:10px 12px;">
+          <div style="font-size:10px;color:#9e9e9e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Avg deviation</div>
+          <div style="font-size:22px;font-weight:700;color:#202124;line-height:1.1;">${(m.deviation?.avgDev || 0).toFixed(0)}%</div>
+          <div style="font-size:10px;color:#9e9e9e;margin-top:11px;">median ${(m.deviation?.medianDev || 0).toFixed(0)}% · p90 ${(m.deviation?.p90Dev || 0).toFixed(0)}%</div>
+        </td></tr>
+      </table>
+    </td>
+    <td width="20%" style="vertical-align:top;">
+      ${scorecard(
+        'Reopen rate',
+        reopenRate.toFixed(1) + '%',
+        rs.color,
+        Math.min(reopenRate, 25) * 4,
+        rs.color,
+        `${totalReopened} reopened · ${totalIssues} total`
+      )}
+    </td>
+  </tr></table>`;
+};
+
 export const buildHtml = (report, startDate, endDate) => {
   const date = `${dayjs(startDate).format('dddd, MMMM D')} - ${dayjs(endDate).format('dddd, MMMM D')}`;
   const repos = Object.entries(report).filter(([k]) => k !== 'devs');
@@ -212,56 +304,23 @@ export const buildHtml = (report, startDate, endDate) => {
     const kpi = m.kpi || 0;
     const ks = kpiStyle(kpi);
     const taskDetails = est.taskDetails || [];
-    const suspiciousCount = rev.suspiciousReviewCount || 0;
-
-
-    const cards4 = `
-    <table cellpadding="0" cellspacing="0" width="100%"><tr>
-      <td width="25%" style="padding-right:8px;vertical-align:top;">
-        ${scorecard('Estimation KPI', kpi + '%', ks.color, kpi, ks.color,
-          `${m.total || 0} tasks · ${m.majorMisses || 0} major miss${(m.majorMisses || 0) !== 1 ? 'es' : ''}`)}
-      </td>
-      <td width="25%" style="padding-right:8px;vertical-align:top;">
-        ${scorecard(
-          'Reviews',
-          rev.reviewedMrs || 0,
-          suspiciousCount === 0 ? '#1a6e2e' : '#8a5000',
-          null,
-          null,
-          suspiciousCount === 0
-            ? 'No suspicious reviews'
-            : `${suspiciousCount} suspicious review${suspiciousCount > 1 ? 's' : ''}`
-        )}
-      </td>
-      <td width="25%" style="padding-right:8px;vertical-align:top;">
-        <table cellpadding="0" cellspacing="0" width="100%" style="background:#f8f9fa;border-radius:6px;border:1px solid #e8eaed;">
-          <tr><td style="padding:10px 12px;">
-            <div style="font-size:10px;color:#9e9e9e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Pickup time</div>
-            <div style="font-size:22px;font-weight:700;color:#202124;line-height:1.1;">${fmt(rev.pickupTime.median)}</div>
-            <div style="font-size:10px;color:#9e9e9e;margin-top:11px;">p90 ${fmt(rev.pickupTime.p90)} · avg ${fmt(rev.pickupTime.average)}</div>
-          </td></tr>
-        </table>
-      </td>
-      <td width="25%" style="vertical-align:top;">
-        <table cellpadding="0" cellspacing="0" width="100%" style="background:#f8f9fa;border-radius:6px;border:1px solid #e8eaed;">
-          <tr><td style="padding:10px 12px;">
-            <div style="font-size:10px;color:#9e9e9e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Avg deviation</div>
-            <div style="font-size:22px;font-weight:700;color:#202124;line-height:1.1;">${(m.deviation?.avgDev || 0).toFixed(0)}%</div>
-            <div style="font-size:10px;color:#9e9e9e;margin-top:11px;">median ${(m.deviation?.medianDev || 0).toFixed(0)}% · p90 ${(m.deviation?.p90Dev || 0).toFixed(0)}%</div>
-          </td></tr>
-        </table>
-      </td>
-    </tr></table>`;
+    const reopenRate = est.reopenRate || 0;
+    const totalReopened = est.totalReopened || 0;
+    const totalIssues = est.totalIssues || 0;
+    const reopenedIssues = est.reopenedIssues || [];
 
     return `<table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:14px;border:1px solid #e8eaed;border-radius:8px;overflow:hidden;">
       <tr><td style="padding:12px 16px;border-bottom:1px solid #e8eaed;">
         <span style="font-size:14px;font-weight:700;color:#202124;">${name}</span>
       </td></tr>
-      <tr><td style="padding:12px 16px;border-bottom:1px solid #e8eaed;">${cards4}</td></tr>
+      <tr><td style="padding:12px 16px;border-bottom:1px solid #e8eaed;">
+        ${buildCards5(rev, m, kpi, ks, reopenRate, totalReopened, totalIssues)}
+      </td></tr>
       <tr style="background:#f8f9fa;"><td style="padding:0;">
         ${buildTaskTables(
           taskDetails,
-          rev.suspiciousReviews || []
+          rev.suspiciousReviews || [],
+          reopenedIssues
         )}
       </td></tr>
     </table>`;
@@ -318,65 +377,23 @@ export const buildDevHtml = (report, devName, startDate, endDate) => {
   const est = d.estimation;
   const m = est.devMetrics[0] || {};
   const kpi = m.kpi || 0;
-
   const ks = kpiStyle(kpi);
   const taskDetails = est.taskDetails || [];
-  const suspiciousCount = rev.suspiciousReviewCount || 0;
-
-  const cards4 = `
-  <table cellpadding="0" cellspacing="0" width="100%"><tr>
-    <td width="25%" style="padding-right:8px;vertical-align:top;">
-      ${scorecard(
-        'Estimation KPI',
-        kpi + '%',
-        ks.color,
-        kpi,
-        ks.color,
-        `${m.total || 0} tasks · ${m.majorMisses || 0} major miss${(m.majorMisses || 0) !== 1 ? 'es' : ''}`
-      )}
-    </td>
-    <td width="25%" style="padding-right:8px;vertical-align:top;">
-      ${scorecard(
-        'Reviews',
-        rev.reviewedMrs || 0,
-        suspiciousCount === 0 ? '#1a6e2e' : '#8a5000',
-        null,
-        null,
-        suspiciousCount === 0
-          ? 'No suspicious reviews'
-          : `${suspiciousCount} suspicious review${suspiciousCount > 1 ? 's' : ''}`
-      )}
-    </td>
-    <td width="25%" style="padding-right:8px;vertical-align:top;">
-      <table cellpadding="0" cellspacing="0" width="100%" style="background:#f8f9fa;border-radius:6px;border:1px solid #e8eaed;">
-        <tr><td style="padding:10px 12px;">
-          <div style="font-size:10px;color:#9e9e9e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Pickup time</div>
-          <div style="font-size:22px;font-weight:700;color:#202124;line-height:1.1;">${fmt(rev.pickupTime.median)}</div>
-          <div style="font-size:10px;color:#9e9e9e;margin-top:11px;">p90 ${fmt(rev.pickupTime.p90)} · avg ${fmt(rev.pickupTime.average)}</div>
-        </td></tr>
-      </table>
-    </td>
-    <td width="25%" style="vertical-align:top;">
-      <table cellpadding="0" cellspacing="0" width="100%" style="background:#f8f9fa;border-radius:6px;border:1px solid #e8eaed;">
-        <tr><td style="padding:10px 12px;">
-          <div style="font-size:10px;color:#9e9e9e;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:4px;">Avg deviation</div>
-          <div style="font-size:22px;font-weight:700;color:#202124;line-height:1.1;">${(m.deviation?.avgDev || 0).toFixed(0)}%</div>
-          <div style="font-size:10px;color:#9e9e9e;margin-top:11px;">
-            median ${(m.deviation?.medianDev || 0).toFixed(0)}% · 
-            p90 ${(m.deviation?.p90Dev || 0).toFixed(0)}%
-          </div>
-        </td></tr>
-      </table>
-    </td>
-  </tr></table>`;
+  const reopenRate = est.reopenRate || 0;
+  const totalReopened = est.totalReopened || 0;
+  const totalIssues = est.totalIssues || 0;
+  const reopenedIssues = est.reopenedIssues || [];
 
   const devCard = `
   <table cellpadding="0" cellspacing="0" width="100%" style="margin-bottom:14px;border:1px solid #e8eaed;border-radius:8px;overflow:hidden;">
-    <tr><td style="padding:12px 16px;border-bottom:1px solid #e8eaed;">${cards4}</td></tr>
+    <tr><td style="padding:12px 16px;border-bottom:1px solid #e8eaed;">
+      ${buildCards5(rev, m, kpi, ks, reopenRate, totalReopened, totalIssues)}
+    </td></tr>
     <tr style="background:#f8f9fa;"><td style="padding:0;">
       ${buildTaskTables(
         taskDetails,
-        rev.suspiciousReviews || []
+        rev.suspiciousReviews || [],
+        reopenedIssues
       )}
     </td></tr>
   </table>`;
